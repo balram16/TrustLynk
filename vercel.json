@@ -1,12 +1,10 @@
 {
   "version": 2,
   "framework": "nextjs",
-  "installCommand": "cd frontend && pnpm install --no-frozen-lockfile || npm install --legacy-peer-deps",
-  "buildCommand": "cd frontend && pnpm build || npm run build",
-  "outputDirectory": "frontend/.next",
+  "installCommand": "pnpm install --no-frozen-lockfile || npm install --legacy-peer-deps",
+  "buildCommand": "pnpm build || npm run build",
+  "outputDirectory": ".next",
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1"
   }
 }
-
-
