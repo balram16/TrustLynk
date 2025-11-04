@@ -1,0 +1,1172 @@
+{
+    "api_examples": {
+        "base_url": "http://localhost:5000/api/v1",
+        "requests": [
+            {
+                "name": "Get Health Records - Patient 1",
+                "description": "Retrieve health records using Aadhaar",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=123456789012'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Aarav Sharma",
+                            "identifier": "123456789012",
+                            "identifier_type": "Aadhaar",
+                            "age": 45,
+                            "gender": "Male",
+                            "blood_group": "B+",
+                            "marital_status": "Married",
+                            "occupation": "Service",
+                            "address": {
+                                "city": "Mumbai",
+                                "state": "Maharashtra",
+                                "pincode": "400001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Type 2 Diabetes Mellitus", "Essential Hypertension"],
+                            "allergies": ["Penicillin"],
+                            "family_history": ["Father - Diabetes", "Mother - Hypertension"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Laparoscopic Cholecystectomy",
+                                    "date": "2023-06-15",
+                                    "hospital": "Fortis Memorial Research Institute",
+                                    "surgeon": "Dr. Gupta"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-15",
+                                "hospital": "Apollo Hospitals, Chennai",
+                                "department": "Endocrinology",
+                                "doctor": "Dr. Patel",
+                                "diagnosis": "Type 2 Diabetes Mellitus",
+                                "prescribed_medications": ["Metformin 500mg BD", "Glimepiride 1mg OD"],
+                                "follow_up_date": "2024-03-15"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 2",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=234567890123'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Priya Patel",
+                            "identifier": "234567890123",
+                            "identifier_type": "Aadhaar",
+                            "age": 32,
+                            "gender": "Female",
+                            "blood_group": "A+",
+                            "marital_status": "Married",
+                            "occupation": "Teacher",
+                            "address": {
+                                "city": "Delhi",
+                                "state": "Delhi",
+                                "pincode": "110001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Asthma"],
+                            "allergies": ["Dust", "Pollen"],
+                            "family_history": ["Mother - Asthma"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-01-20",
+                                "hospital": "Max Super Speciality Hospital, Delhi",
+                                "department": "Pulmonology",
+                                "doctor": "Dr. Verma",
+                                "diagnosis": "Bronchial Asthma",
+                                "prescribed_medications": ["Budecort 200 Inhaler", "Levolin Inhaler"],
+                                "follow_up_date": "2024-04-20"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 3",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=345678901234'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Rajesh Kumar",
+                            "identifier": "345678901234",
+                            "identifier_type": "Aadhaar",
+                            "age": 58,
+                            "gender": "Male",
+                            "blood_group": "O+",
+                            "marital_status": "Married",
+                            "occupation": "Business",
+                            "address": {
+                                "city": "Bangalore",
+                                "state": "Karnataka",
+                                "pincode": "560001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Coronary Artery Disease", "Dyslipidemia"],
+                            "allergies": ["Sulfa drugs"],
+                            "family_history": ["Father - Cardiac Arrest", "Brother - Hypertension"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Coronary Angioplasty",
+                                    "date": "2022-11-20",
+                                    "hospital": "Narayana Health, Bangalore",
+                                    "surgeon": "Dr. Reddy"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-28",
+                                "hospital": "Fortis Hospital, Bangalore",
+                                "department": "Cardiology",
+                                "doctor": "Dr. Krishnan",
+                                "diagnosis": "Stable Angina",
+                                "prescribed_medications": ["Aspirin 75mg OD", "Atorvastatin 40mg OD", "Metoprolol 25mg BD"],
+                                "follow_up_date": "2024-05-28"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 4",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=456789012345'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Sneha Iyer",
+                            "identifier": "456789012345",
+                            "identifier_type": "Aadhaar",
+                            "age": 28,
+                            "gender": "Female",
+                            "blood_group": "AB+",
+                            "marital_status": "Single",
+                            "occupation": "Software Engineer",
+                            "address": {
+                                "city": "Pune",
+                                "state": "Maharashtra",
+                                "pincode": "411001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Polycystic Ovarian Syndrome"],
+                            "allergies": ["Seafood"],
+                            "family_history": ["Mother - PCOS", "Aunt - Thyroid disorder"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-05",
+                                "hospital": "Ruby Hall Clinic, Pune",
+                                "department": "Gynecology",
+                                "doctor": "Dr. Desai",
+                                "diagnosis": "PCOS with Irregular Cycles",
+                                "prescribed_medications": ["Metformin 500mg BD", "Folic Acid 5mg OD"],
+                                "follow_up_date": "2024-06-05"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 5",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=567890123456'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Mohammed Ali",
+                            "identifier": "567890123456",
+                            "identifier_type": "Aadhaar",
+                            "age": 62,
+                            "gender": "Male",
+                            "blood_group": "B-",
+                            "marital_status": "Married",
+                            "occupation": "Retired",
+                            "address": {
+                                "city": "Hyderabad",
+                                "state": "Telangana",
+                                "pincode": "500001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Chronic Kidney Disease Stage 3", "Type 2 Diabetes Mellitus"],
+                            "allergies": ["Iodine contrast"],
+                            "family_history": ["Father - Kidney failure", "Mother - Diabetes"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Cataract Surgery",
+                                    "date": "2023-08-12",
+                                    "hospital": "LV Prasad Eye Institute, Hyderabad",
+                                    "surgeon": "Dr. Rao"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-01-30",
+                                "hospital": "KIMS Hospital, Hyderabad",
+                                "department": "Nephrology",
+                                "doctor": "Dr. Naidu",
+                                "diagnosis": "CKD Stage 3 with Anemia",
+                                "prescribed_medications": ["Insulin Glargine 20 units", "Erythropoietin injection", "Calcium carbonate 500mg BD"],
+                                "follow_up_date": "2024-04-30"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 6",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=678901234567'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Ananya Das",
+                            "identifier": "678901234567",
+                            "identifier_type": "Aadhaar",
+                            "age": 35,
+                            "gender": "Female",
+                            "blood_group": "A-",
+                            "marital_status": "Married",
+                            "occupation": "Doctor",
+                            "address": {
+                                "city": "Kolkata",
+                                "state": "West Bengal",
+                                "pincode": "700001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Hypothyroidism"],
+                            "allergies": ["Latex"],
+                            "family_history": ["Mother - Thyroid disorder", "Sister - Autoimmune disease"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Cesarean Section",
+                                    "date": "2022-05-15",
+                                    "hospital": "Apollo Gleneagles, Kolkata",
+                                    "surgeon": "Dr. Chatterjee"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-10",
+                                "hospital": "AMRI Hospital, Kolkata",
+                                "department": "Endocrinology",
+                                "doctor": "Dr. Banerjee",
+                                "diagnosis": "Subclinical Hypothyroidism",
+                                "prescribed_medications": ["Levothyroxine 75mcg OD"],
+                                "follow_up_date": "2024-05-10"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 7",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=789012345678'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Vikram Singh",
+                            "identifier": "789012345678",
+                            "identifier_type": "Aadhaar",
+                            "age": 41,
+                            "gender": "Male",
+                            "blood_group": "O-",
+                            "marital_status": "Married",
+                            "occupation": "Army Officer",
+                            "address": {
+                                "city": "Chandigarh",
+                                "state": "Chandigarh",
+                                "pincode": "160001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Lower Back Pain", "Cervical Spondylosis"],
+                            "allergies": ["NSAIDs"],
+                            "family_history": ["Father - Arthritis"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Lumbar Discectomy",
+                                    "date": "2021-09-25",
+                                    "hospital": "PGI Chandigarh",
+                                    "surgeon": "Dr. Sharma"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-01",
+                                "hospital": "Fortis Hospital, Mohali",
+                                "department": "Orthopedics",
+                                "doctor": "Dr. Kohli",
+                                "diagnosis": "Chronic Lower Back Pain",
+                                "prescribed_medications": ["Pregabalin 75mg BD", "Physiotherapy sessions"],
+                                "follow_up_date": "2024-04-01"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 8",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=890123456789'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Kavya Menon",
+                            "identifier": "890123456789",
+                            "identifier_type": "Aadhaar",
+                            "age": 26,
+                            "gender": "Female",
+                            "blood_group": "B+",
+                            "marital_status": "Single",
+                            "occupation": "Nurse",
+                            "address": {
+                                "city": "Kochi",
+                                "state": "Kerala",
+                                "pincode": "682001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Migraine"],
+                            "allergies": ["Codeine"],
+                            "family_history": ["Mother - Migraine", "Grandmother - Stroke"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-20",
+                                "hospital": "Aster Medcity, Kochi",
+                                "department": "Neurology",
+                                "doctor": "Dr. Pillai",
+                                "diagnosis": "Chronic Migraine",
+                                "prescribed_medications": ["Propranolol 40mg BD", "Sumatriptan 50mg SOS"],
+                                "follow_up_date": "2024-05-20"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 9",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=901234567890'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Arjun Reddy",
+                            "identifier": "901234567890",
+                            "identifier_type": "Aadhaar",
+                            "age": 52,
+                            "gender": "Male",
+                            "blood_group": "AB-",
+                            "marital_status": "Divorced",
+                            "occupation": "Businessman",
+                            "address": {
+                                "city": "Chennai",
+                                "state": "Tamil Nadu",
+                                "pincode": "600001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Fatty Liver Disease", "Obesity"],
+                            "allergies": ["None"],
+                            "family_history": ["Father - Cirrhosis", "Mother - Diabetes"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Hernia Repair",
+                                    "date": "2020-07-18",
+                                    "hospital": "Apollo Hospital, Chennai",
+                                    "surgeon": "Dr. Subramanian"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-01-15",
+                                "hospital": "Fortis Malar Hospital, Chennai",
+                                "department": "Gastroenterology",
+                                "doctor": "Dr. Raman",
+                                "diagnosis": "Non-Alcoholic Fatty Liver Disease",
+                                "prescribed_medications": ["Ursodeoxycholic acid 300mg BD", "Vitamin E 400mg OD"],
+                                "follow_up_date": "2024-07-15"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 10",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=012345678901'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Deepika Rao",
+                            "identifier": "012345678901",
+                            "identifier_type": "Aadhaar",
+                            "age": 39,
+                            "gender": "Female",
+                            "blood_group": "O+",
+                            "marital_status": "Married",
+                            "occupation": "Lawyer",
+                            "address": {
+                                "city": "Jaipur",
+                                "state": "Rajasthan",
+                                "pincode": "302001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Rheumatoid Arthritis"],
+                            "allergies": ["Methotrexate"],
+                            "family_history": ["Mother - Rheumatoid Arthritis", "Sister - Lupus"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-25",
+                                "hospital": "Fortis Escorts Hospital, Jaipur",
+                                "department": "Rheumatology",
+                                "doctor": "Dr. Jain",
+                                "diagnosis": "Active Rheumatoid Arthritis",
+                                "prescribed_medications": ["Hydroxychloroquine 200mg BD", "Prednisolone 10mg OD", "Calcium with Vitamin D"],
+                                "follow_up_date": "2024-05-25"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 11",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=123450987654'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Sanjay Gupta",
+                            "identifier": "123450987654",
+                            "identifier_type": "Aadhaar",
+                            "age": 67,
+                            "gender": "Male",
+                            "blood_group": "A+",
+                            "marital_status": "Widowed",
+                            "occupation": "Retired Teacher",
+                            "address": {
+                                "city": "Lucknow",
+                                "state": "Uttar Pradesh",
+                                "pincode": "226001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Chronic Obstructive Pulmonary Disease", "Benign Prostatic Hyperplasia"],
+                            "allergies": ["Morphine"],
+                            "family_history": ["Brother - Lung Cancer"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Transurethral Resection of Prostate",
+                                    "date": "2023-03-10",
+                                    "hospital": "Sahara Hospital, Lucknow",
+                                    "surgeon": "Dr. Mishra"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-08",
+                                "hospital": "Apollo Medics Hospital, Lucknow",
+                                "department": "Pulmonology",
+                                "doctor": "Dr. Tiwari",
+                                "diagnosis": "COPD Exacerbation",
+                                "prescribed_medications": ["Tiotropium Inhaler", "Formoterol Inhaler", "Azithromycin 500mg OD"],
+                                "follow_up_date": "2024-04-08"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 12",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=234561098765'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Meera Krishnan",
+                            "identifier": "234561098765",
+                            "identifier_type": "Aadhaar",
+                            "age": 44,
+                            "gender": "Female",
+                            "blood_group": "B-",
+                            "marital_status": "Married",
+                            "occupation": "Homemaker",
+                            "address": {
+                                "city": "Coimbatore",
+                                "state": "Tamil Nadu",
+                                "pincode": "641001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Fibromyalgia", "Depression"],
+                            "allergies": ["Amoxicillin"],
+                            "family_history": ["Mother - Depression", "Father - Diabetes"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Hysterectomy",
+                                    "date": "2021-11-22",
+                                    "hospital": "PSG Hospitals, Coimbatore",
+                                    "surgeon": "Dr. Swaminathan"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-12",
+                                "hospital": "Kovai Medical Center, Coimbatore",
+                                "department": "Psychiatry",
+                                "doctor": "Dr. Ramesh",
+                                "diagnosis": "Major Depressive Disorder with Fibromyalgia",
+                                "prescribed_medications": ["Duloxetine 60mg OD", "Pregabalin 150mg BD"],
+                                "follow_up_date": "2024-05-12"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 13",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=345672109876'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Rohit Nair",
+                            "identifier": "345672109876",
+                            "identifier_type": "Aadhaar",
+                            "age": 29,
+                            "gender": "Male",
+                            "blood_group": "A-",
+                            "marital_status": "Single",
+                            "occupation": "Athlete",
+                            "address": {
+                                "city": "Thiruvananthapuram",
+                                "state": "Kerala",
+                                "pincode": "695001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Asthma Exercise-Induced"],
+                            "allergies": ["Grass pollen"],
+                            "family_history": ["Father - Asthma"],
+                            "surgeries": [
+                                {
+                                    "procedure": "ACL Reconstruction",
+                                    "date": "2022-01-15",
+                                    "hospital": "KIMS Hospital, Trivandrum",
+                                    "surgeon": "Dr. Menon"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-10",
+                                "hospital": "Cosmopolitan Hospital, Trivandrum",
+                                "department": "Sports Medicine",
+                                "doctor": "Dr. Varghese",
+                                "diagnosis": "Exercise-Induced Asthma",
+                                "prescribed_medications": ["Montelukast 10mg OD", "Salbutamol Inhaler SOS"],
+                                "follow_up_date": "2024-06-10"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 14",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=456783210987'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Lakshmi Bose",
+                            "identifier": "456783210987",
+                            "identifier_type": "Aadhaar",
+                            "age": 71,
+                            "gender": "Female",
+                            "blood_group": "AB+",
+                            "marital_status": "Widowed",
+                            "occupation": "Retired",
+                            "address": {
+                                "city": "Bhubaneswar",
+                                "state": "Odisha",
+                                "pincode": "751001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Osteoporosis", "Hypertension", "Alzheimer's Disease"],
+                            "allergies": ["Aspirin"],
+                            "family_history": ["Mother - Dementia", "Father - Stroke"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Hip Replacement",
+                                    "date": "2020-05-20",
+                                    "hospital": "Apollo Hospital, Bhubaneswar",
+                                    "surgeon": "Dr. Panda"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-01-25",
+                                "hospital": "AIIMS Bhubaneswar",
+                                "department": "Geriatrics",
+                                "doctor": "Dr. Mohanty",
+                                "diagnosis": "Early Stage Alzheimer's with Osteoporosis",
+                                "prescribed_medications": ["Donepezil 10mg OD", "Alendronate 70mg weekly", "Calcium 1000mg OD"],
+                                "follow_up_date": "2024-04-25"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 15",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=567894321098'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Karan Malhotra",
+                            "identifier": "567894321098",
+                            "identifier_type": "Aadhaar",
+                            "age": 36,
+                            "gender": "Male",
+                            "blood_group": "O+",
+                            "marital_status": "Married",
+                            "occupation": "Chef",
+                            "address": {
+                                "city": "Ahmedabad",
+                                "state": "Gujarat",
+                                "pincode": "380001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Gastroesophageal Reflux Disease"],
+                            "allergies": ["Shellfish"],
+                            "family_history": ["Father - Peptic Ulcer"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-18",
+                                "hospital": "Sterling Hospital, Ahmedabad",
+                                "department": "Gastroenterology",
+                                "doctor": "Dr. Shah",
+                                "diagnosis": "Chronic GERD",
+                                "prescribed_medications": ["Pantoprazole 40mg OD", "Sucralfate suspension"],
+                                "follow_up_date": "2024-05-18"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 16",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=678905432109'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Nisha Agarwal",
+                            "identifier": "678905432109",
+                            "identifier_type": "Aadhaar",
+                            "age": 48,
+                            "gender": "Female",
+                            "blood_group": "B+",
+                            "marital_status": "Married",
+                            "occupation": "Banker",
+                            "address": {
+                                "city": "Indore",
+                                "state": "Madhya Pradesh",
+                                "pincode": "452001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Uterine Fibroids", "Iron Deficiency Anemia"],
+                            "allergies": ["Contrast dye"],
+                            "family_history": ["Sister - Fibroids", "Mother - Anemia"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Myomectomy",
+                                    "date": "2023-09-08",
+                                    "hospital": "Bombay Hospital, Indore",
+                                    "surgeon": "Dr. Joshi"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-02",
+                                "hospital": "CHL Hospital, Indore",
+                                "department": "Hematology",
+                                "doctor": "Dr. Kapoor",
+                                "diagnosis": "Moderate Iron Deficiency Anemia",
+                                "prescribed_medications": ["Ferrous sulfate 325mg OD", "Vitamin C 500mg OD"],
+                                "follow_up_date": "2024-06-02"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 17",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=789016543210'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Aditya Chopra",
+                            "identifier": "789016543210",
+                            "identifier_type": "Aadhaar",
+                            "age": 55,
+                            "gender": "Male",
+                            "blood_group": "A+",
+                            "marital_status": "Married",
+                            "occupation": "Journalist",
+                            "address": {
+                                "city": "Noida",
+                                "state": "Uttar Pradesh",
+                                "pincode": "201301"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Type 1 Diabetes Mellitus", "Diabetic Retinopathy"],
+                            "allergies": ["Bee stings"],
+                            "family_history": ["Mother - Type 2 Diabetes", "Brother - Type 1 Diabetes"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Laser Photocoagulation for Retinopathy",
+                                    "date": "2022-12-05",
+                                    "hospital": "Dr. Shroff's Charity Eye Hospital, Delhi",
+                                    "surgeon": "Dr. Mehta"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-08",
+                                "hospital": "Fortis Hospital, Noida",
+                                "department": "Endocrinology",
+                                "doctor": "Dr. Saxena",
+                                "diagnosis": "Type 1 DM with Retinopathy",
+                                "prescribed_medications": ["Insulin Aspart 12 units TID", "Insulin Glargine 24 units OD"],
+                                "follow_up_date": "2024-04-08"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 18",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=890127654321'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Pooja Bhatt",
+                            "identifier": "890127654321",
+                            "identifier_type": "Aadhaar",
+                            "age": 33,
+                            "gender": "Female",
+                            "blood_group": "O-",
+                            "marital_status": "Single",
+                            "occupation": "Fashion Designer",
+                            "address": {
+                                "city": "Surat",
+                                "state": "Gujarat",
+                                "pincode": "395001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Psoriasis"],
+                            "allergies": ["Nickel"],
+                            "family_history": ["Father - Psoriasis", "Grandfather - Skin condition"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-01-28",
+                                "hospital": "Kiran Hospital, Surat",
+                                "department": "Dermatology",
+                                "doctor": "Dr. Patel",
+                                "diagnosis": "Moderate Plaque Psoriasis",
+                                "prescribed_medications": ["Methotrexate 15mg weekly", "Folic acid 5mg weekly", "Calcipotriol cream"],
+                                "follow_up_date": "2024-04-28"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 19",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=901238765432'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Manish Tripathi",
+                            "identifier": "901238765432",
+                            "identifier_type": "Aadhaar",
+                            "age": 50,
+                            "gender": "Male",
+                            "blood_group": "AB+",
+                            "marital_status": "Married",
+                            "occupation": "Civil Engineer",
+                            "address": {
+                                "city": "Nagpur",
+                                "state": "Maharashtra",
+                                "pincode": "440001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Gout", "Hyperuricemia"],
+                            "allergies": ["Allopurinol"],
+                            "family_history": ["Father - Gout", "Uncle - Kidney stones"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-05",
+                                "hospital": "AIIMS Nagpur",
+                                "department": "Rheumatology",
+                                "doctor": "Dr. Kulkarni",
+                                "diagnosis": "Recurrent Gouty Arthritis",
+                                "prescribed_medications": ["Febuxostat 80mg OD", "Colchicine 0.6mg BD", "Indomethacin 25mg TID"],
+                                "follow_up_date": "2024-06-05"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 20",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=012349876543'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Ritu Saxena",
+                            "identifier": "012349876543",
+                            "identifier_type": "Aadhaar",
+                            "age": 42,
+                            "gender": "Female",
+                            "blood_group": "A-",
+                            "marital_status": "Married",
+                            "occupation": "Pharmacist",
+                            "address": {
+                                "city": "Gurgaon",
+                                "state": "Haryana",
+                                "pincode": "122001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Systemic Lupus Erythematosus"],
+                            "allergies": ["Sulfonamides"],
+                            "family_history": ["Sister - Autoimmune thyroiditis", "Mother - Rheumatoid Arthritis"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-22",
+                                "hospital": "Medanta Hospital, Gurgaon",
+                                "department": "Rheumatology",
+                                "doctor": "Dr. Arora",
+                                "diagnosis": "SLE with Mild Activity",
+                                "prescribed_medications": ["Hydroxychloroquine 400mg OD", "Prednisolone 15mg OD", "Mycophenolate 500mg BD"],
+                                "follow_up_date": "2024-05-22"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 21",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=123451098765'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Suresh Pillai",
+                            "identifier": "123451098765",
+                            "identifier_type": "Aadhaar",
+                            "age": 64,
+                            "gender": "Male",
+                            "blood_group": "B-",
+                            "marital_status": "Married",
+                            "occupation": "Retired Government Employee",
+                            "address": {
+                                "city": "Kozhikode",
+                                "state": "Kerala",
+                                "pincode": "673001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Parkinson's Disease", "Hypertension"],
+                            "allergies": ["Levodopa"],
+                            "family_history": ["Father - Parkinson's Disease"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-01-18",
+                                "hospital": "MIMS Hospital, Kozhikode",
+                                "department": "Neurology",
+                                "doctor": "Dr. Nambiar",
+                                "diagnosis": "Parkinson's Disease Stage 2",
+                                "prescribed_medications": ["Pramipexole 0.5mg TID", "Rasagiline 1mg OD", "Amlodipine 5mg OD"],
+                                "follow_up_date": "2024-04-18"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 22",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=234562109876'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Shweta Kaur",
+                            "identifier": "234562109876",
+                            "identifier_type": "Aadhaar",
+                            "age": 31,
+                            "gender": "Female",
+                            "blood_group": "O+",
+                            "marital_status": "Married",
+                            "occupation": "Marketing Executive",
+                            "address": {
+                                "city": "Amritsar",
+                                "state": "Punjab",
+                                "pincode": "143001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Endometriosis"],
+                            "allergies": ["Soy"],
+                            "family_history": ["Mother - Endometriosis", "Aunt - Ovarian cyst"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Laparoscopic Excision of Endometriosis",
+                                    "date": "2023-04-12",
+                                    "hospital": "Fortis Hospital, Amritsar",
+                                    "surgeon": "Dr. Gill"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-12",
+                                "hospital": "Max Hospital, Mohali",
+                                "department": "Gynecology",
+                                "doctor": "Dr. Bhatia",
+                                "diagnosis": "Endometriosis Stage 3",
+                                "prescribed_medications": ["Dienogest 2mg OD", "Ibuprofen 400mg SOS"],
+                                "follow_up_date": "2024-06-12"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 23",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=345673210987'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Harish Yadav",
+                            "identifier": "345673210987",
+                            "identifier_type": "Aadhaar",
+                            "age": 38,
+                            "gender": "Male",
+                            "blood_group": "A+",
+                            "marital_status": "Married",
+                            "occupation": "Pilot",
+                            "address": {
+                                "city": "Goa",
+                                "state": "Goa",
+                                "pincode": "403001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Sleep Apnea"],
+                            "allergies": ["Peanuts"],
+                            "family_history": ["Father - Obesity", "Brother - Sleep disorders"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-02-05",
+                                "hospital": "Goa Medical College",
+                                "department": "Pulmonology",
+                                "doctor": "Dr. Fernandes",
+                                "diagnosis": "Moderate Obstructive Sleep Apnea",
+                                "prescribed_medications": ["CPAP therapy", "Weight reduction counseling"],
+                                "follow_up_date": "2024-05-05"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 24",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=456784321098'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Divya Srinivasan",
+                            "identifier": "456784321098",
+                            "identifier_type": "Aadhaar",
+                            "age": 27,
+                            "gender": "Female",
+                            "blood_group": "AB-",
+                            "marital_status": "Single",
+                            "occupation": "Research Scientist",
+                            "address": {
+                                "city": "Mysore",
+                                "state": "Karnataka",
+                                "pincode": "570001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Irritable Bowel Syndrome"],
+                            "allergies": ["Lactose"],
+                            "family_history": ["Mother - IBS", "Sister - Celiac disease"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-15",
+                                "hospital": "Apollo BGS Hospital, Mysore",
+                                "department": "Gastroenterology",
+                                "doctor": "Dr. Kumar",
+                                "diagnosis": "IBS with Diarrhea",
+                                "prescribed_medications": ["Mebeverine 135mg TID", "Rifaximin 550mg BD", "Probiotics"],
+                                "follow_up_date": "2024-06-15"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 25",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=567895432109'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Rahul Mehta",
+                            "identifier": "567895432109",
+                            "identifier_type": "Aadhaar",
+                            "age": 47,
+                            "gender": "Male",
+                            "blood_group": "O-",
+                            "marital_status": "Married",
+                            "occupation": "Architect",
+                            "address": {
+                                "city": "Vadodara",
+                                "state": "Gujarat",
+                                "pincode": "390001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Peripheral Neuropathy", "Vitamin B12 Deficiency"],
+                            "allergies": ["Cephalosporins"],
+                            "family_history": ["Mother - Pernicious Anemia"],
+                            "surgeries": []
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-01-22",
+                                "hospital": "SSG Hospital, Vadodara",
+                                "department": "Neurology",
+                                "doctor": "Dr. Pandya",
+                                "diagnosis": "Peripheral Neuropathy due to B12 Deficiency",
+                                "prescribed_medications": ["Methylcobalamin 1500mcg OD", "Gabapentin 300mg TID", "Alpha Lipoic Acid"],
+                                "follow_up_date": "2024-04-22"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "Get Health Records - Patient 26",
+                "curl_command": "curl -X GET 'http://localhost:5000/api/v1/health-records?identifier=678906543210'",
+                "example_response": {
+                    "status": "success",
+                    "data": {
+                        "patient_info": {
+                            "name": "Anjali Choudhury",
+                            "identifier": "678906543210",
+                            "identifier_type": "Aadhaar",
+                            "age": 53,
+                            "gender": "Female",
+                            "blood_group": "B+",
+                            "marital_status": "Married",
+                            "occupation": "Professor",
+                            "address": {
+                                "city": "Patna",
+                                "state": "Bihar",
+                                "pincode": "800001"
+                            }
+                        },
+                        "medical_history": {
+                            "chronic_conditions": ["Breast Cancer Survivor", "Lymphedema"],
+                            "allergies": ["Taxanes"],
+                            "family_history": ["Mother - Breast Cancer", "Sister - Ovarian Cancer"],
+                            "surgeries": [
+                                {
+                                    "procedure": "Modified Radical Mastectomy",
+                                    "date": "2021-08-30",
+                                    "hospital": "AIIMS Patna",
+                                    "surgeon": "Dr. Singh"
+                                }
+                            ]
+                        },
+                        "recent_visits": [
+                            {
+                                "date": "2024-03-20",
+                                "hospital": "Paras HMRI Hospital, Patna",
+                                "department": "Oncology",
+                                "doctor": "Dr. Mishra",
+                                "diagnosis": "Post-Mastectomy Lymphedema",
+                                "prescribed_medications": ["Tamoxifen 20mg OD", "Compression therapy", "Lymphatic drainage exercises"],
+                                "follow_up_date": "2024-09-20"
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+}
