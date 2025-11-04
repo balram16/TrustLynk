@@ -48,6 +48,11 @@ export const USER_POLICY_STATUS_ACTIVE = 1;
 export const USER_POLICY_STATUS_EXPIRED = 2;
 export const USER_POLICY_STATUS_CANCELLED = 3;
 
+// Claim status constants (match on-chain)
+export const CLAIM_STATUS_APPROVED = 1;
+export const CLAIM_STATUS_PENDING = 2;
+export const CLAIM_STATUS_REJECTED = 3;
+
 export interface BlockchainPolicy {
   policy_id: string;
   title: string;

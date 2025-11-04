@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/use-toast"
 import Image from "next/image"
 import { Loader } from "@/components/ui/loader"
 
-export default function VerifyEmailPage() {
+function VerifyEmailInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const userType = searchParams.get("userType") || "user"
@@ -146,6 +146,14 @@ export default function VerifyEmailPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-muted-foreground">Loading…</div>}>
+      <VerifyEmailInner />
+    </Suspense>
   )
 }
 
