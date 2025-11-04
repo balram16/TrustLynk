@@ -1,6 +1,7 @@
 // IPFS Service - Upload files to Pinata
-const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY || 'f22da8ff6445b1a6bc58';
-const PINATA_API_SECRET = process.env.NEXT_PUBLIC_PINATA_API_SECRET || '3795af3771adf2b2ceed97ce848c009ec0015ca3dad1ef6ad6ce6bb3f6de49d3';
+// SECURITY: Do NOT hardcode API keys. Provide them via environment variables only.
+const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY;
+const PINATA_API_SECRET = process.env.NEXT_PUBLIC_PINATA_API_SECRET;
 const PINATA_API_URL = 'https://api.pinata.cloud';
 
 export interface IPFSUploadResponse {
@@ -23,6 +24,9 @@ export async function uploadToIPFS(
   onProgress?: (progress: UploadProgress) => void
 ): Promise<IPFSUploadResponse> {
   try {
+    if (!PINATA_API_KEY || !PINATA_API_SECRET) {
+      throw new Error('Pinata API credentials are not configured. Set NEXT_PUBLIC_PINATA_API_KEY and NEXT_PUBLIC_PINATA_API_SECRET in .env.local');
+    }
     // Validate file
     if (!file) {
       throw new Error('No file provided');
@@ -121,6 +125,9 @@ export async function pinByHash(
   name?: string
 ): Promise<void> {
   try {
+    if (!PINATA_API_KEY || !PINATA_API_SECRET) {
+      throw new Error('Pinata API credentials are not configured.');
+    }
     const response = await fetch(`${PINATA_API_URL}/pinning/pinByHash`, {
       method: 'POST',
       headers: {
@@ -151,6 +158,9 @@ export async function pinByHash(
  */
 export async function testPinataConnection(): Promise<boolean> {
   try {
+    if (!PINATA_API_KEY || !PINATA_API_SECRET) {
+      return false;
+    }
     const response = await fetch(`${PINATA_API_URL}/data/testAuthentication`, {
       method: 'GET',
       headers: {
