@@ -26,7 +26,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { 
   getAllPolicies,
   getPolicyTypeString,
-  convertXLMToINR
+  convertETHToINR
 } from "@/lib/blockchain"
 
 export const dynamic = 'force-dynamic'

@@ -12,8 +12,8 @@ import { FreighterWalletProvider } from "@/context/freighter-wallet-context"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "TrustLynk - AI-Powered Insurance on Stellar Blockchain",
-  description: "Revolutionizing insurance claims with AI, Stellar blockchain & instant XLM payouts",
+  title: "TrustLynk - AI-Powered Insurance on Ethereum Blockchain",
+  description: "Revolutionizing insurance claims with AI, Ethereum blockchain & instant ETH payouts",
   generator: 'v0.dev'
 }
 
@@ -45,4 +45,3 @@ export default function RootLayout({
     </html>
   )
 }
-

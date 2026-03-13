@@ -209,7 +209,7 @@ export default function RegisterPage() {
                   className="grid grid-cols-2 gap-4"
                 >
                   <div className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                    formData.userType === "individual"
+                    (formData.userType as string) === "individual"
                       ? "border-[#07a6ec] bg-blue-50 dark:bg-blue-900/20"
                       : "hover:border-gray-400"
                   }`}>
@@ -223,7 +223,7 @@ export default function RegisterPage() {
                   </div>
 
                   <div className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                    formData.userType === "company"
+                    (formData.userType as string) === "company"
                       ? "border-[#07a6ec] bg-blue-50 dark:bg-blue-900/20"
                       : "hover:border-gray-400"
                   }`}>
@@ -441,7 +441,7 @@ export default function RegisterPage() {
                 className="grid grid-cols-2 gap-4"
               >
                 <div className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                  formData.userType === "individual"
+                  (formData.userType as string) === "individual"
                     ? "border-[#07a6ec] bg-blue-50 dark:bg-blue-900/20"
                     : "hover:border-gray-400"
                 }`}>
@@ -455,7 +455,7 @@ export default function RegisterPage() {
                 </div>
 
                 <div className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                  formData.userType === "company"
+                  (formData.userType as string) === "company"
                     ? "border-[#07a6ec] bg-blue-50 dark:bg-blue-900/20"
                     : "hover:border-gray-400"
                 }`}>

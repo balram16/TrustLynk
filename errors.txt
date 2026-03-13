@@ -1,0 +1,18 @@
+app/auth/register/page.tsx(212,21): error TS2367: This comparison appears to be unintentional because the types '"company"' and '"individual"' have no overlap.
+app/auth/register/page.tsx(458,19): error TS2367: This comparison appears to be unintentional because the types '"individual"' and '"company"' have no overlap.
+app/dashboard/user/claims/success/page.tsx(8,22): error TS7016: Could not find a declaration file for module 'canvas-confetti'. 'C:/TrustLynk/frontend/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/canvas-confetti` if it exists or add a new declaration (.d.ts) file containing `declare module 'canvas-confetti';`
+app/dashboard/user/policies/page.tsx(95,26): error TS7006: Parameter 'type' implicitly has an 'any' type.
+app/dashboard/user/policies/page.tsx(110,27): error TS7006: Parameter 'type' implicitly has an 'any' type.
+app/dashboard/user/policies/page.tsx(125,27): error TS7006: Parameter 'status' implicitly has an 'any' type.
+app/dashboard/user/policies/page.tsx(149,24): error TS7006: Parameter 'policyId' implicitly has an 'any' type.
+app/dashboard/user/policies/page.tsx(168,27): error TS7006: Parameter 'document' implicitly has an 'any' type.
+app/onboarding/company/page.tsx(503,35): error TS2322: Type '{ currentStep: number; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'currentStep' does not exist on type 'IntrinsicAttributes'.
+components/chatbot-widget.tsx(26,30): error TS2339: Property 'scrollIntoView' does not exist on type 'never'.
+components/chatbot-widget.tsx(30,36): error TS7006: Parameter 'e' implicitly has an 'any' type.
+components/chatbot-widget.tsx(36,17): error TS2345: Argument of type '(prev: { role: string; content: string; image: string; }[]) => { role: string; content: string; }[]' is not assignable to parameter of type 'SetStateAction<{ role: string; content: string; image: string; }[]>'.
+  Type '(prev: { role: string; content: string; image: string; }[]) => { role: string; content: string; }[]' is not assignable to type '(prevState: { role: string; content: string; image: string; }[]) => { role: string; content: string; image: string; }[]'.
+    Type '{ role: string; content: string; }[]' is not assignable to type '{ role: string; content: string; image: string; }[]'.
+      Property 'image' is missing in type '{ role: string; content: string; }' but required in type '{ role: string; content: string; image: string; }'.
+components/insurance/claim-workflow.tsx(74,27): error TS2322: Type 'string' is not assignable to type '"pending" | "completed" | "failed" | "in-progress"'.

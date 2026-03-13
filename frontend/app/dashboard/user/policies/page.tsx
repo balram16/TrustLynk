@@ -1,362 +1,293 @@
 "use client"
 
-import { useState } from "react"
-import Image from "next/image"
-import Link from "next/link"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { 
-  Car, 
-  Home, 
-  Heart, 
-  Plane, 
-  Shield, 
-  FileText, 
-  Download, 
-  Calendar, 
-  AlertTriangle, 
+import {
+  Car,
+  Home,
+  Heart,
+  Plane,
+  Shield,
+  FileText,
+  Calendar,
+  AlertTriangle,
   Search,
-  PlusCircle,
-  ChevronRight,
-  CheckCircle
+  CheckCircle,
+  Loader2,
+  User,
+  RefreshCw
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { useFreighterWallet } from "@/context/freighter-wallet-context"
+import {
+  getAllPolicies,
+  getUserPolicies,
+  getPolicyTypeString,
+  BlockchainPolicy,
+  BlockchainUserPolicy
+} from "@/lib/blockchain"
 
 export const dynamic = 'force-dynamic'
 
+type ExtendedUserPolicy = BlockchainUserPolicy & { policy?: BlockchainPolicy }
+
 export default function PoliciesPage() {
   const { toast } = useToast()
-  const [activeTab, setActiveTab] = useState("all")
+  const { walletAddress } = useFreighterWallet()
+
   const [searchQuery, setSearchQuery] = useState("")
+  const [availablePolicies, setAvailablePolicies] = useState<BlockchainPolicy[]>([])
+  const [userPolicies, setUserPolicies] = useState<ExtendedUserPolicy[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const policies = [
-    {
-      id: "POL-123456",
-      name: "Comprehensive Health Insurance",
-      type: "health",
-      provider: "Max Bupa Health Insurance",
-      status: "Active",
-      premium: "₹15,000 / year",
-      coverage: "₹5,00,000",
-      startDate: "15 Jan 2023",
-      endDate: "14 Jan 2024",
-      members: ["Self", "Spouse", "Children (2)"],
-      documents: ["Policy Document", "Health Cards", "Terms & Conditions"],
-      claims: 2,
-    },
-    {
-      id: "POL-789012",
-      name: "Motor Insurance - Premium",
-      type: "motor",
-      provider: "ICICI Lombard",
-      status: "Active",
-      premium: "₹8,500 / year",
-      coverage: "₹3,50,000",
-      startDate: "10 Mar 2023",
-      endDate: "09 Mar 2024",
-      vehicle: "Honda City (KA-01-AB-1234)",
-      documents: ["Policy Document", "RC Copy", "Insurance Certificate"],
-      claims: 1,
-    },
-    {
-      id: "POL-345678",
-      name: "Home Insurance Plus",
-      type: "home",
-      provider: "HDFC ERGO",
-      status: "Active",
-      premium: "₹4,200 / year",
-      coverage: "₹50,00,000",
-      startDate: "05 May 2023",
-      endDate: "04 May 2024",
-      address: "123 Main Street, Bangalore",
-      documents: ["Policy Document", "Property Papers", "Valuation Certificate"],
-      claims: 0,
-    },
-    {
-      id: "POL-901234",
-      name: "Travel Insurance - Asia Pacific",
-      type: "travel",
-      provider: "Bajaj Allianz",
-      status: "Expiring Soon",
-      premium: "₹2,800 / 3 months",
-      coverage: "₹25,00,000",
-      startDate: "20 Jun 2023",
-      endDate: "19 Sep 2023",
-      countries: ["Singapore", "Thailand", "Malaysia", "Indonesia"],
-      documents: ["Policy Document", "E-Card", "Emergency Contacts"],
-      claims: 0,
-    },
-  ]
+  useEffect(() => {
+    fetchData()
+  }, [walletAddress])
 
-  const getPolicyIcon = (type) => {
-    switch (type) {
-      case "health":
-        return <Heart className="h-6 w-6 text-red-500" />
-      case "motor":
-        return <Car className="h-6 w-6 text-blue-500" />
-      case "home":
-        return <Home className="h-6 w-6 text-green-500" />
-      case "travel":
-        return <Plane className="h-6 w-6 text-purple-500" />
-      default:
-        return <Shield className="h-6 w-6 text-gray-500" />
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [allP, userP] = await Promise.all([
+        getAllPolicies(),
+        walletAddress ? getUserPolicies(walletAddress) : Promise.resolve([])
+      ])
+      setAvailablePolicies(allP || [])
+      // Enrich user policies with the matching policy details
+      const enriched = (userP || []).map((up: any) => ({
+        ...up,
+        policy: (allP || []).find((p: BlockchainPolicy) => p.policy_id === up.policy_id)
+      }))
+      setUserPolicies(enriched)
+    } catch (err) {
+      console.error("Error fetching policies:", err)
+      toast({ title: "Error", description: "Failed to load policies from blockchain", variant: "destructive" })
+    } finally {
+      setLoading(false)
     }
   }
 
-  const getPolicyColor = (type) => {
-    switch (type) {
-      case "health":
-        return "bg-red-100 dark:bg-red-950/30"
-      case "motor":
-        return "bg-blue-100 dark:bg-blue-950/30"
-      case "home":
-        return "bg-green-100 dark:bg-green-950/30"
-      case "travel":
-        return "bg-purple-100 dark:bg-purple-950/30"
-      default:
-        return "bg-gray-100 dark:bg-gray-800"
+  const getPolicyIcon = (type: string | number) => {
+    const t = typeof type === "number" ? getPolicyTypeString(type) : type
+    switch (t) {
+      case "Health": return <Heart className="h-6 w-6 text-red-500" />
+      case "Auto": return <Car className="h-6 w-6 text-blue-500" />
+      case "Home": return <Home className="h-6 w-6 text-yellow-500" />
+      case "Travel": return <Plane className="h-6 w-6 text-purple-500" />
+      case "Life": return <User className="h-6 w-6 text-green-500" />
+      default: return <Shield className="h-6 w-6 text-gray-500" />
     }
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Active":
-        return "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-400"
-      case "Expiring Soon":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-400"
-      case "Expired":
-        return "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-400"
-      default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400"
+  const getStatusBadge = (status: number, purchaseDate: string, durationDays: string | undefined) => {
+    if (durationDays) {
+      const purchase = new Date(parseInt(purchaseDate) * 1000)
+      const expiry = new Date(purchase.getTime() + parseInt(durationDays) * 86400000)
+      if (new Date() > expiry) {
+        return <Badge className="bg-red-100 text-red-700">Expired</Badge>
+      }
     }
+    return <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" />Active</Badge>
   }
 
-  const filteredPolicies = policies.filter(policy => {
-    // Filter by tab
-    if (activeTab !== "all" && policy.type !== activeTab) return false;
-    
-    // Filter by search query
-    if (searchQuery && !policy.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
-        !policy.id.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    
-    return true;
-  });
+  const filteredAvailable = availablePolicies.filter(p =>
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    getPolicyTypeString(Number(p.policy_type)).toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
-  const handleRenew = (policyId) => {
-    toast({
-      title: "Renewal initiated",
-      description: `Renewal process started for policy ${policyId}`,
-      action: (
-        <div className="flex items-center gap-2">
-          <Image
-            src="https://i.ibb.co/8nHxb4zN/claimsaathi-snapping-winking.png"
-            alt="Claim Saathi"
-            width={24}
-            height={24}
-            className="rounded-full"
-          />
-          <span>Great choice!</span>
-        </div>
-      ),
-    })
-  }
+  const filteredUser = userPolicies.filter(up =>
+    (up.policy?.title || "").toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
-  const handleDownload = (document) => {
-    toast({
-      title: "Document download",
-      description: `Downloading ${document}...`,
-      action: (
-        <div className="flex items-center gap-2">
-          <Image
-            src="https://i.ibb.co/DgLw71WX/claimsaathi-happy-tooexcited-smilingwithopenmouth.png"
-            alt="Claim Saathi"
-            width={24}
-            height={24}
-            className="rounded-full"
-          />
-          <span>Coming right up!</span>
-        </div>
-      ),
-    })
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-[#fa6724]" />
+        <span className="ml-3 text-muted-foreground">Loading policies from blockchain...</span>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Policies</h1>
-          <p className="text-muted-foreground">Manage and track all your insurance policies in one place</p>
-        </div>
-        <Link href="/dashboard/policies/new">
-          <Button className="bg-[#fa6724] hover:bg-[#e55613]">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add New Policy
-          </Button>
-        </Link>
-      </div>
-
-      <div className="flex items-center gap-3 mb-3">
-        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-[#07a6ec] to-[#fa6724] flex items-center justify-center flex-shrink-0">
-          <Image
-            src="https://i.ibb.co/XZP3h1bN/claimsaathi-neutral-firm.png"
-            alt="Claim Saathi"
-            width={24}
-            height={24}
-            className="rounded-full"
-          />
-        </div>
-        <div className="bg-muted p-3 rounded-lg rounded-bl-none">
-          <p className="text-sm">
-            Your travel policy is expiring soon! Would you like to renew it before your next trip?
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-[#fa6724] to-[#07a6ec] bg-clip-text text-transparent">
+            My Policies
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your blockchain-secured insurance policies
           </p>
         </div>
+        <Button variant="outline" onClick={fetchData} className="gap-2">
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search policies..."
-            className="pl-8"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        
-        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-5 w-full">
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="health">Health</TabsTrigger>
-            <TabsTrigger value="motor">Motor</TabsTrigger>
-            <TabsTrigger value="home">Home</TabsTrigger>
-            <TabsTrigger value="travel">Travel</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search policies..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
       </div>
 
-      {filteredPolicies.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="rounded-full bg-muted p-3 mb-4">
-              <FileText className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-medium mb-2">No policies found</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              We couldn't find any policies matching your search criteria.
-            </p>
-            <Button variant="outline" onClick={() => {setSearchQuery(""); setActiveTab("all");}}>
-              Clear filters
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6">
-          {filteredPolicies.map((policy) => (
-            <Card key={policy.id} className="overflow-hidden">
-              <div className={`h-2 ${getPolicyColor(policy.type)}`} />
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${getPolicyColor(policy.type)}`}>
-                      {getPolicyIcon(policy.type)}
-                    </div>
-                    <div>
-                      <CardTitle>{policy.name}</CardTitle>
-                      <CardDescription>{policy.provider}</CardDescription>
-                    </div>
-                  </div>
-                  <Badge className={getStatusColor(policy.status)}>{policy.status}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="pb-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Policy Number</p>
-                    <p className="font-medium">{policy.id}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Premium</p>
-                    <p className="font-medium">{policy.premium}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Coverage</p>
-                    <p className="font-medium">{policy.coverage}</p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Policy Period</p>
-                      <p className="font-medium">{policy.startDate} - {policy.endDate}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Claims Filed</p>
-                      <p className="font-medium">{policy.claims} claims</p>
-                    </div>
-                  </div>
-                </div>
+      <Tabs defaultValue="mine">
+        <TabsList>
+          <TabsTrigger value="mine">My Policies ({userPolicies.length})</TabsTrigger>
+          <TabsTrigger value="available">Available Policies ({availablePolicies.length})</TabsTrigger>
+        </TabsList>
 
-                {policy.status === "Expiring Soon" && (
-                  <div className="bg-yellow-50 dark:bg-yellow-950/20 p-3 rounded-lg flex items-start gap-3 mb-4">
-                    <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Policy Expiring Soon</p>
-                      <p className="text-xs text-muted-foreground">
-                        Your policy will expire on {policy.endDate}. Renew now to maintain continuous coverage.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="border-t pt-4">
-                  <p className="text-sm font-medium mb-2">Policy Documents</p>
-                  <div className="flex flex-wrap gap-2">
-                    {policy.documents.map((doc) => (
-                      <Button 
-                        key={doc} 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex items-center gap-1"
-                        onClick={() => handleDownload(doc)}
-                      >
-                        <Download className="h-3 w-3" />
-                        {doc}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
+        {/* MY POLICIES */}
+        <TabsContent value="mine" className="space-y-4 mt-4">
+          {filteredUser.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <Shield className="h-14 w-14 text-muted-foreground mb-4 opacity-40" />
+                <h3 className="text-lg font-semibold mb-1">No policies yet</h3>
+                <p className="text-muted-foreground text-sm max-w-sm">
+                  You haven't purchased any policies yet. Go to the Dashboard to browse and purchase available policies.
+                </p>
               </CardContent>
-              <CardFooter className="flex justify-between border-t pt-4">
-                <Button variant="outline" asChild>
-                  <Link href={`/dashboard/policies/${policy.id}`}>
-                    View Details
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Link>
-                </Button>
-                {policy.status === "Expiring Soon" && (
-                  <Button 
-                    className="bg-[#fa6724] hover:bg-[#e55613]"
-                    onClick={() => handleRenew(policy.id)}
-                  >
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Renew Policy
-                  </Button>
-                )}
-              </CardFooter>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            filteredUser.map((up) => {
+              const p = up.policy
+              const typeLabel = p ? getPolicyTypeString(Number(p.policy_type)) : "Policy"
+              const purchaseDate = new Date(parseInt(up.purchase_date) * 1000).toLocaleDateString("en-IN")
+              let expiryLabel = "—"
+              if (p?.duration_days) {
+                const purchaseTs = parseInt(up.purchase_date) * 1000
+                const expiry = new Date(purchaseTs + parseInt(p.duration_days) * 86400000)
+                expiryLabel = expiry.toLocaleDateString("en-IN")
+              }
+              return (
+                <Card key={up.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-muted">
+                          {getPolicyIcon(p?.policy_type ?? typeLabel)}
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">{p?.title ?? `Policy #${up.policy_id}`}</CardTitle>
+                          <CardDescription className="text-xs mt-0.5">
+                            ID: {up.policy_id} &bull; {typeLabel}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      {getStatusBadge(up.status, up.purchase_date, p?.duration_days)}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {p && (
+                      <p className="text-sm text-muted-foreground mb-4">{p.description}</p>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Premium Paid</p>
+                        <p className="font-semibold">₹{parseInt(up.premium_paid).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Coverage</p>
+                        <p className="font-semibold">₹{parseInt(p?.coverage_amount ?? "0").toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Start Date</p>
+                        <p className="font-semibold">{purchaseDate}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Expiry Date</p>
+                        <p className="font-semibold">{expiryLabel}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <Badge variant="outline" className="text-xs flex gap-1">
+                        <FileText className="h-3 w-3" />
+                        NFT Certificate #{up.id}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs flex gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Purchased {purchaseDate}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })
+          )}
+        </TabsContent>
+
+        {/* AVAILABLE POLICIES */}
+        <TabsContent value="available" className="space-y-4 mt-4">
+          {filteredAvailable.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <AlertTriangle className="h-14 w-14 text-muted-foreground mb-4 opacity-40" />
+                <h3 className="text-lg font-semibold mb-1">No policies available</h3>
+                <p className="text-muted-foreground text-sm">
+                  No active policies found on the blockchain.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {filteredAvailable.map((p) => {
+                const typeLabel = getPolicyTypeString(Number(p.policy_type))
+                return (
+                  <Card key={p.policy_id} className="hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-muted">
+                          {getPolicyIcon(p.policy_type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-sm">{p.title}</CardTitle>
+                          <CardDescription className="text-xs">{typeLabel}</CardDescription>
+                        </div>
+                        {p.status === 1 ? (
+                          <Badge className="bg-green-100 text-green-700 text-xs">Active</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{p.description}</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Monthly Premium</span>
+                          <p className="font-semibold">₹{parseInt(p.monthly_premium).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Coverage</span>
+                          <p className="font-semibold">₹{parseInt(p.coverage_amount).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Duration</span>
+                          <p className="font-semibold">{p.duration_days} days</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Yearly Premium</span>
+                          <p className="font-semibold">₹{parseInt(p.yearly_premium).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
-} 
-
+}

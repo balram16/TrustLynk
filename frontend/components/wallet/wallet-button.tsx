@@ -66,7 +66,7 @@ export function WalletButton({ className, variant = "default", size = "default" 
       ) : (
         <Wallet className="h-4 w-4 mr-2" />
       )}
-      Connect Freighter Wallet
+      Connect MetaMask Wallet
     </Button>
   )
 }

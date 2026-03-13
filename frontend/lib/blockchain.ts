@@ -1,58 +1,113 @@
-import * as StellarSdk from "stellar-sdk";
-import { 
-  isConnected as freighterIsConnected,
-  getPublicKey,
-  signTransaction,
-} from "@stellar/freighter-api";
+import { ethers } from "ethers";
 
-// Type declaration for Freighter wallet
-declare global {
-  interface Window {
-    freighter: any;
-  }
-}
+// ==========================================
+// Contract ABI (matches InsurancePortal.sol with struct params)
+// ==========================================
+const CONTRACT_ABI = [
+  // Constructor / Init
+  "function initialize(address _admin) external",
+  "function isInitialized() external view returns (bool)",
+  "function admin() external view returns (address)",
 
-// Contract ID - Deployed to Stellar Testnet (Updated with Policyholder Details)
-export const CONTRACT_ID = "CCOAWNMTZ4QV3FM6VGANVXYTJU6S4UNEPZWH3BIG62J3VEYPOMEI4YQJ";
+  // User Management
+  "function registerUser(address _user, uint32 _role) external",
+  "function getUserRole(address _userAddress) external view returns (uint32)",
+  "function checkAdminStatus(address _user) external view returns (bool)",
+  "function getUserInfo(address _userAddress) external view returns (tuple(address wallet, uint32 role, bool registered, string name, string location, string contact, uint256 registeredAt))",
 
-// Stellar Testnet configuration
-export const STELLAR_NETWORK = StellarSdk.Networks.TESTNET;
-export const HORIZON_URL = "https://horizon-testnet.stellar.org";
-export const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
+  // Policy Management (uses PolicyParams struct)
+  "function createPolicy(tuple(string title, string description, uint32 policyType, uint256 monthlyPremium, uint256 yearlyPremium, uint256 coverageAmount, uint256 minAge, uint256 maxAge, uint256 durationDays, uint256 waitingPeriodDays) params) external returns (uint256)",
+  "function getAllPolicies() external view returns (tuple(uint256 policyId, string title, string description, uint32 policyType, uint256 monthlyPremium, uint256 yearlyPremium, uint256 coverageAmount, uint256 minAge, uint256 maxAge, uint256 durationDays, uint256 waitingPeriodDays, uint256 createdAt, address createdBy)[])",
+  "function getPolicy(uint256 _policyId) external view returns (tuple(uint256 policyId, string title, string description, uint32 policyType, uint256 monthlyPremium, uint256 yearlyPremium, uint256 coverageAmount, uint256 minAge, uint256 maxAge, uint256 durationDays, uint256 waitingPeriodDays, uint256 createdAt, address createdBy))",
 
-// Initialize Stellar SDK
-const server = new StellarSdk.Horizon.Server(HORIZON_URL);
-const sorobanServer = new StellarSdk.SorobanRpc.Server(SOROBAN_RPC_URL);
+  // User Policies (uses PurchaseParams struct)
+  "function purchasePolicy(tuple(uint256 policyId, string metadataUri, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup) params) external payable",
+  "function getMyPolicies(address _userAddress) external view returns (tuple(uint256 policyId, address userAddress, uint256 purchaseDate, uint256 expiryDate, uint256 premiumPaidWei, uint256 monthlyPremiumWei, bool active, string tokenId, string metadataUri, uint256 escrowId, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup)[])",
 
-// Native XLM token address on Stellar
-export const NATIVE_TOKEN = "native";
+  // Claims (uses ClaimParams struct)
+  "function claimPolicy(tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName) params) external",
+  "function approveClaim(uint256 _claimId) external",
+  "function rejectClaim(uint256 _claimId) external",
+  "function getClaimStatus(uint256 _claimId) external view returns (uint32, uint256, uint32)",
+  "function getClaimDetails(uint256 _claimId) external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName))",
+  "function getAllClaims() external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
+  "function getUserClaims(address _userAddress) external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
 
-// Role constants - same as in Stellar smart contract
+  // NFT / Tokens
+  "function getNFTMetadata(string _tokenId) external view returns (tuple(string name, string description, string imageUri, uint256 coverageAmount, uint256 validityStart, uint256 validityEnd, uint256 premiumAmount, uint32 policyType, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup))",
+  "function getUserTokensList(address _userAddress) external view returns (string[])",
+  "function getPolicyTokensList(uint256 _policyId) external view returns (string[])",
+  "function getTotalTokens() external view returns (uint256)",
+
+  // Treasury / Oracle
+  "function getTreasury() external view returns (uint256)",
+  "function storeOracleRequest(string _requestId, uint256 _claimId, string _abhaId, string _ipfsCid) external",
+  "function updateOracleRequestStatus(string _requestId, uint32 _status) external",
+  "function getOracleRequest(string _requestId) external view returns (tuple(string requestId, uint256 claimId, string abhaId, string ipfsCid, uint256 requestedAt, uint32 status))",
+  "function verifyIpfsCidInClaim(string _ipfsCid) external view returns (bool)",
+  "function getClaimsByAbhaId(string _abhaId) external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
+
+  // Counters
+  "function policyCounter() external view returns (uint256)",
+  "function claimCounter() external view returns (uint256)",
+
+  // Events
+  "event UserRegistered(address indexed user, uint32 role)",
+  "event PolicyCreated(uint256 indexed policyId, string title, address indexed creator)",
+  "event PolicyPurchased(uint256 indexed policyId, address indexed buyer, uint256 paymentAmount, string tokenId, uint256 escrowId)",
+  "event ClaimSubmitted(uint256 indexed claimId, uint256 indexed policyId, address indexed user, uint32 aggregateScore, uint32 status)",
+  "event ClaimApproved(uint256 indexed claimId, address indexed user, uint256 claimAmount)",
+  "event ClaimRejected(uint256 indexed claimId, address indexed admin)",
+  "event ContractInitialized(address indexed admin)",
+];
+
+// ==========================================
+// Configuration
+// ==========================================
+export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+
+export const SUPPORTED_CHAINS: Record<number, { name: string; rpcUrl: string; blockExplorer: string }> = {
+  11155111: {
+    name: "Sepolia Testnet",
+    rpcUrl: "https://eth-sepolia.g.alchemy.com/v2/demo",
+    blockExplorer: "https://sepolia.etherscan.io",
+  },
+  31337: {
+    name: "Hardhat Local",
+    rpcUrl: "http://127.0.0.1:8545",
+    blockExplorer: "",
+  },
+};
+
+export const DEFAULT_CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || "31337");
+
+// ==========================================
+// Role Constants
+// ==========================================
 export const ROLE_UNREGISTERED = 0;
 export const ROLE_POLICYHOLDER = 1;
 export const ROLE_ADMIN = 2;
 
-// Policy type constants
 export const POLICY_TYPE_HEALTH = 1;
 export const POLICY_TYPE_LIFE = 2;
 export const POLICY_TYPE_AUTO = 3;
 export const POLICY_TYPE_HOME = 4;
 export const POLICY_TYPE_TRAVEL = 5;
 
-// Policy status constants
 export const POLICY_STATUS_ACTIVE = 1;
 export const POLICY_STATUS_INACTIVE = 2;
 
-// User policy status constants
 export const USER_POLICY_STATUS_ACTIVE = 1;
 export const USER_POLICY_STATUS_EXPIRED = 2;
 export const USER_POLICY_STATUS_CANCELLED = 3;
 
-// Claim status constants (match on-chain)
 export const CLAIM_STATUS_APPROVED = 1;
 export const CLAIM_STATUS_PENDING = 2;
 export const CLAIM_STATUS_REJECTED = 3;
 
+// ==========================================
+// Interfaces
+// ==========================================
 export interface BlockchainPolicy {
   policy_id: string;
   title: string;
@@ -88,7 +143,7 @@ export interface PolicyClaim {
   user_address: string;
   claim_amount: string;
   aggregate_score: number;
-  status: number; // 1=APPROVED, 2=PENDING, 3=REJECTED
+  status: number;
   claimed_at: string;
   processed_at: string;
 }
@@ -108,440 +163,257 @@ export interface PolicyNFTMetadata {
   holder_blood_group: string;
 }
 
-// Payment constants (XLM instead of APT)
-export const XLM_DECIMALS = 10000000; // 1 XLM = 10^7 stroops
-export const INR_TO_XLM_RATE = 1000000; // 1 XLM ≈ 10 INR (simplified for demo)
+// ==========================================
+// ETH Payment Helpers
+// ==========================================
+export const ETH_DECIMALS = 18;
+export const INR_TO_ETH_RATE = 250000; // 1 ETH ≈ 250,000 INR
 
-/**
- * Convert INR to XLM (stroops)
- */
-export function convertINRToXLM(inrAmount: number): number {
-  return Math.floor((inrAmount * XLM_DECIMALS) / INR_TO_XLM_RATE);
+export function convertINRToETH(inrAmount: number): number {
+  const ethAmount = inrAmount / INR_TO_ETH_RATE;
+  return Number(ethAmount.toFixed(6));
 }
 
-/**
- * Convert XLM (stroops) to INR
- */
-export function convertXLMToINR(xlmStroops: number): number {
-  return Math.floor((xlmStroops * INR_TO_XLM_RATE) / XLM_DECIMALS);
+export function convertETHToINR(ethAmount: number | bigint): number {
+  const amount = typeof ethAmount === "bigint" ? parseFloat(ethers.formatEther(ethAmount)) : Number(ethAmount);
+  return Math.floor(amount * INR_TO_ETH_RATE);
 }
 
-/**
- * Format XLM amount for display
- */
-export function formatXLM(stroops: number): string {
-  return (stroops / XLM_DECIMALS).toFixed(4) + " XLM";
+export function formatETH(ethAmount: number | bigint | string): string {
+  const amount = typeof ethAmount === "bigint" ? parseFloat(ethers.formatEther(ethAmount)) 
+               : typeof ethAmount === "string" ? parseFloat(ethAmount) : Number(ethAmount);
+  return amount.toFixed(6) + " ETH";
 }
 
-/**
- * Check if Freighter wallet is available
- */
+// ==========================================
+// Provider / Contract Helpers
+// ==========================================
+
+function getProvider(): ethers.BrowserProvider {
+  if (typeof window === "undefined" || !window.ethereum) {
+    throw new Error("MetaMask is not installed. Please install MetaMask extension.");
+  }
+  return new ethers.BrowserProvider(window.ethereum);
+}
+
+// Read-only provider goes directly to the RPC node – bypasses MetaMask network so
+// getUserRole / view calls work regardless of which chain MetaMask is currently on.
+function getReadProvider(): ethers.JsonRpcProvider {
+  const chainId = DEFAULT_CHAIN_ID;
+  const chain = SUPPORTED_CHAINS[chainId];
+  const rpcUrl = chain?.rpcUrl ?? "http://127.0.0.1:8545";
+  return new ethers.JsonRpcProvider(rpcUrl);
+}
+
+async function ensureCorrectNetwork(): Promise<void> {
+  if (typeof window === "undefined" || !window.ethereum) return;
+  const targetChainId = DEFAULT_CHAIN_ID;
+  const targetHex = "0x" + targetChainId.toString(16);
+  try {
+    const currentChainHex: string = await window.ethereum.request({ method: "eth_chainId" });
+    const currentChainId = parseInt(currentChainHex, 16);
+    if (currentChainId !== targetChainId) {
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: targetHex }],
+        });
+      } catch (switchErr: any) {
+        if (switchErr.code === 4902) {
+          // Chain not in MetaMask – add it (Hardhat Local)
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: targetHex,
+              chainName: targetChainId === 31337 ? "Hardhat Local" : "Sepolia Testnet",
+              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+              rpcUrls: [SUPPORTED_CHAINS[targetChainId]?.rpcUrl ?? "http://127.0.0.1:8545"],
+            }],
+          });
+        } else {
+          throw switchErr;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not ensure correct network:", err);
+  }
+}
+
+async function getSigner(): Promise<ethers.JsonRpcSigner> {
+  await ensureCorrectNetwork();
+  const provider = getProvider();
+  return await provider.getSigner();
+}
+
+function getReadContract(): ethers.Contract {
+  const provider = getReadProvider();
+  if (!CONTRACT_ADDRESS) {
+    throw new Error("Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS in .env.local");
+  }
+  return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+}
+
+async function getWriteContract(): Promise<ethers.Contract> {
+  const signer = await getSigner();
+  if (!CONTRACT_ADDRESS) {
+    throw new Error("Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS in .env.local");
+  }
+  return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+}
+
+// ==========================================
+// Wallet Functions (MetaMask)
+// ==========================================
+
 export async function isFreighterAvailable(): Promise<boolean> {
-  return await freighterIsConnected();
+  return typeof window !== "undefined" && !!window.ethereum;
 }
 
-/**
- * Get connected wallet public key
- */
 export async function getWalletPublicKey(): Promise<string> {
   try {
-    const publicKey = await getPublicKey();
-    return publicKey;
+    const provider = getProvider();
+    const signer = await provider.getSigner();
+    return await signer.getAddress();
   } catch (error) {
-    console.error("Error getting public key:", error);
-    throw new Error("Failed to get wallet public key");
+    console.error("Error getting wallet address:", error);
+    throw new Error("Failed to get wallet address");
   }
 }
 
-/**
- * Build and sign a Soroban contract invocation
- */
-async function invokeContract(
-  functionName: string,
-  args: StellarSdk.xdr.ScVal[],
-  auth: boolean = true
-): Promise<{ success: boolean; transactionHash?: string; result?: any; error?: string }> {
+// ==========================================
+// User Functions
+// ==========================================
+
+export async function registerUser(
+  userAddress: string,
+  role: number
+): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
   try {
-    const publicKey = await getWalletPublicKey();
-    
-    // Load account from Horizon (make sure account is funded)
-    let sourceAccount;
-    try {
-      sourceAccount = await server.loadAccount(publicKey);
-    } catch (error) {
-      console.error("Failed to load account. Make sure your account is funded on Stellar Testnet.");
-      console.log("Get testnet XLM at: https://laboratory.stellar.org/#account-creator");
-      throw new Error("Account not found or not funded. Please fund your account with testnet XLM first.");
+    if (!userAddress || userAddress.trim() === "") {
+      throw new Error("Invalid user address");
     }
 
-    // Build the contract invocation operation
-    const contract = new StellarSdk.Contract(CONTRACT_ID);
-    const operation = contract.call(functionName, ...args);
+    const contract = await getWriteContract();
+    const tx = await contract.registerUser(userAddress, role);
+    const receipt = await tx.wait();
 
-    // Build transaction with higher fee for Soroban
-    // Soroban transactions typically need much higher fees than BASE_FEE (100 stroops)
-    // Use 100000 stroops (0.01 XLM) as base, prepareTransaction will adjust as needed
-    let transaction = new StellarSdk.TransactionBuilder(sourceAccount, {
-      fee: "100000", // Higher fee for Soroban contract invocations
-      networkPassphrase: STELLAR_NETWORK,
-    })
-      .addOperation(operation)
-      .setTimeout(180) // Increased timeout for Soroban
-      .build();
-
-    // Prepare and simulate the transaction
-    try {
-      console.log("Transaction before prepare:", transaction);
-      console.log("Source account:", publicKey);
-      console.log("Operation:", operation);
-      
-      transaction = await sorobanServer.prepareTransaction(transaction);
-      
-      console.log("Transaction after prepare:", transaction);
-      console.log("Transaction operations:", transaction.operations);
-    } catch (error: any) {
-      console.error("Failed to prepare transaction:", error);
-      console.error("Error details:", {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-      
-      // Try to extract more detailed error info
-      if (error.response?.data) {
-        try {
-          const errorData = typeof error.response.data === 'string' 
-            ? JSON.parse(error.response.data) 
-            : error.response.data;
-          console.error("Detailed error data:", errorData);
-        } catch (e) {
-          console.error("Raw error response:", error.response.data);
-        }
-      }
-      
-      throw new Error(`Failed to prepare transaction: ${error.message}`);
-    }
-
-    // Convert to XDR for signing
-    const xdr = transaction.toXDR();
-
-    // Sign with Freighter
-    const signedXdr = await signTransaction(xdr, {
-      network: "TESTNET",
-      networkPassphrase: STELLAR_NETWORK,
-    });
-
-    // Submit the transaction
-    const signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXdr, STELLAR_NETWORK);
-    const result = await sorobanServer.sendTransaction(signedTx);
-
-    // Wait for confirmation
-    if (result.status === "PENDING") {
-      let attempts = 0;
-      let getResponse;
-      
-      while (attempts < 10) {
-        try {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          getResponse = await sorobanServer.getTransaction(result.hash);
-          
-          if (getResponse.status === "NOT_FOUND") {
-            attempts++;
-            continue;
-          }
-          
-          if (getResponse.status === "SUCCESS") {
-            console.log("✅ Transaction successful:", result.hash);
-            console.log("Transaction response:", getResponse);
-            
-            // Try to get return value, but don't fail if parsing errors occur
-            let returnValue;
-            try {
-              returnValue = getResponse.returnValue ? scValToNative(getResponse.returnValue) : undefined;
-            } catch (parseError) {
-              console.warn("Could not parse return value, but transaction succeeded:", parseError);
-              returnValue = undefined;
-            }
-            
-            return {
-              success: true,
-              transactionHash: result.hash,
-              result: returnValue,
-            };
-          } else if (getResponse.status === "FAILED") {
-            console.error("Transaction failed:", getResponse);
-            return {
-              success: false,
-              error: `Transaction failed with status: ${getResponse.status}`,
-            };
-          }
-          
-          attempts++;
-        } catch (pollError: any) {
-          console.warn(`Error polling transaction (attempt ${attempts + 1}):`, pollError.message);
-          attempts++;
-          
-          // If we've tried enough times, consider it successful since it was submitted
-          if (attempts >= 10) {
-            console.log("Transaction submitted but status unknown, considering successful:", result.hash);
-            return {
-              success: true,
-              transactionHash: result.hash,
-            };
-          }
-        }
-      }
-      
-      // If we exhausted attempts but transaction was submitted
-      console.log("Transaction submitted, status check timed out:", result.hash);
-      return {
-        success: true,
-        transactionHash: result.hash,
-      };
-    }
-
-    return {
-      success: true,
-      transactionHash: result.hash,
-    };
+    console.log("✅ User registered:", receipt.hash);
+    return { success: true, transactionHash: receipt.hash };
   } catch (error: any) {
-    console.error("Contract invocation error:", error);
-    return {
-      success: false,
-      error: error.message || "Transaction failed",
-    };
-  }
-}
-
-/**
- * Simulate a contract read (view function)
- */
-async function simulateContract(
-  functionName: string,
-  args: StellarSdk.xdr.ScVal[]
-): Promise<any> {
-  try {
-    console.log(`🔍 Simulating contract call: ${functionName}`, args);
-    
-    // Create a dummy source account for simulation (doesn't need to exist)
-    const dummyKeypair = StellarSdk.Keypair.random();
-    const dummyAccount = new StellarSdk.Account(dummyKeypair.publicKey(), "0");
-
-    const contract = new StellarSdk.Contract(CONTRACT_ID);
-    const operation = contract.call(functionName, ...args);
-
-    const transaction = new StellarSdk.TransactionBuilder(dummyAccount, {
-      fee: StellarSdk.BASE_FEE,
-      networkPassphrase: STELLAR_NETWORK,
-    })
-      .addOperation(operation)
-      .setTimeout(30)
-      .build();
-
-    console.log(`📡 Calling Soroban RPC: ${SOROBAN_RPC_URL}`);
-    const simulated = await sorobanServer.simulateTransaction(transaction);
-
-    console.log("Simulation result:", simulated);
-
-    if (StellarSdk.SorobanRpc.Api.isSimulationSuccess(simulated)) {
-      console.log("✅ Simulation successful");
-      return simulated.result?.retval;
-    } else {
-      console.error("❌ Simulation failed with result:", JSON.stringify(simulated, null, 2));
-      
-      // Extract error details if available
-      if ('error' in simulated) {
-        throw new Error(`Simulation failed: ${simulated.error}`);
-      }
-      
-      throw new Error(`Simulation failed: ${JSON.stringify(simulated)}`);
-    }
-  } catch (error: any) {
-    console.error("Contract simulation error:", error);
-    console.error("Error details:", error.message, error.stack);
-    throw error;
-  }
-}
-
-/**
- * Helper to convert JS values to ScVal
- */
-function nativeToScVal(val: any, type?: string): StellarSdk.xdr.ScVal {
-  try {
-    if (type === "address") {
-      // Validate address before converting
-      if (!val || typeof val !== 'string' || val.trim() === '') {
-        throw new Error(`Invalid address value: ${val}`);
-      }
-      return StellarSdk.Address.fromString(val).toScVal();
-    } else if (type === "u32") {
-      return StellarSdk.nativeToScVal(Number(val), { type: "u32" });
-    } else if (type === "u64") {
-      return StellarSdk.nativeToScVal(BigInt(val), { type: "u64" });
-    } else if (type === "i128") {
-      return StellarSdk.nativeToScVal(BigInt(val), { type: "i128" });
-    } else if (type === "string") {
-      return StellarSdk.nativeToScVal(val, { type: "string" });
-    }
-    return StellarSdk.nativeToScVal(val);
-  } catch (error) {
-    console.error(`Error converting value to ScVal:`, val, type, error);
-    throw error;
-  }
-}
-
-/**
- * Helper to convert ScVal to JS values
- */
-function scValToNative(val: StellarSdk.xdr.ScVal): any {
-  return StellarSdk.scValToNative(val);
-}
-
-/**
- * Register a new user with a role
- */
-export async function registerUser(userAddress: string, role: number): Promise<{ success: boolean; transactionHash?: string }> {
-  try {
-    // Validate user address
-    if (!userAddress || userAddress.trim() === '') {
-      throw new Error('Invalid user address: address cannot be empty');
-    }
-    
-    const args = [
-      nativeToScVal(userAddress, "address"),
-      nativeToScVal(role, "u32"),
-    ];
-
-    return await invokeContract("register_user", args);
-  } catch (error) {
     console.error("Error registering user:", error);
-    throw error;
+    return { success: false, error: error.reason || error.message };
   }
 }
 
-/**
- * Register as admin
- */
 export async function registerAsAdmin(): Promise<{ success: boolean; transactionHash?: string }> {
-  const publicKey = await getWalletPublicKey();
-  return registerUser(publicKey, ROLE_ADMIN);
+  const address = await getWalletPublicKey();
+  return registerUser(address, ROLE_ADMIN);
 }
 
-/**
- * Register as policyholder
- */
 export async function registerAsPolicyholder(): Promise<{ success: boolean; transactionHash?: string }> {
-  const publicKey = await getWalletPublicKey();
-  return registerUser(publicKey, ROLE_POLICYHOLDER);
+  const address = await getWalletPublicKey();
+  return registerUser(address, ROLE_POLICYHOLDER);
 }
 
-/**
- * Get user role from blockchain
- */
 export async function getUserRole(walletAddress: string): Promise<number> {
   try {
-    // Validate wallet address
-    if (!walletAddress || walletAddress.trim() === '') {
-      console.warn('getUserRole called with empty wallet address');
+    if (!walletAddress || walletAddress.trim() === "") {
+      console.warn("getUserRole called with empty address");
       return ROLE_UNREGISTERED;
     }
-    
-    const args = [nativeToScVal(walletAddress, "address")];
-    const result = await simulateContract("get_user_role", args);
-    return scValToNative(result);
+
+    const contract = getReadContract();
+    const role = await contract.getUserRole(walletAddress);
+    return Number(role);
   } catch (error) {
     console.error("Error getting user role:", error);
     return ROLE_UNREGISTERED;
   }
 }
 
-/**
- * Create a new insurance policy (admin only)
- */
-export async function createPolicy(
-  policyData: {
-    title: string;
-    description: string;
-    policyType: number;
-    monthlyPremium: number;
-    yearlyPremium: number;
-    coverageAmount: number;
-    minAge: number;
-    maxAge: number;
-    durationDays: number;
-    waitingPeriodDays: number;
-  }
-): Promise<{ success: boolean; transactionHash?: string }> {
+// ==========================================
+// Policy Functions
+// ==========================================
+
+export async function createPolicy(policyData: {
+  title: string;
+  description: string;
+  policyType: number;
+  monthlyPremium: number;
+  yearlyPremium: number;
+  coverageAmount: number;
+  minAge: number;
+  maxAge: number;
+  durationDays: number;
+  waitingPeriodDays: number;
+}): Promise<{ success: boolean; transactionHash?: string }> {
   try {
-    const publicKey = await getWalletPublicKey();
-    
-    // Create PolicyParams struct as ScMap with named fields
-    // Soroban structs with #[contracttype] are serialized as ScMap, not ScVec
-    // IMPORTANT: Map entries MUST be sorted alphabetically by key
-    const mapEntries = [
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("coverage_amount"),
-        val: nativeToScVal(policyData.coverageAmount, "i128")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("description"),
-        val: nativeToScVal(policyData.description, "string")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("duration_days"),
-        val: nativeToScVal(policyData.durationDays, "u64")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("max_age"),
-        val: nativeToScVal(policyData.maxAge, "u64")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("min_age"),
-        val: nativeToScVal(policyData.minAge, "u64")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("monthly_premium"),
-        val: nativeToScVal(policyData.monthlyPremium, "i128")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("policy_type"),
-        val: nativeToScVal(policyData.policyType, "u32")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("title"),
-        val: nativeToScVal(policyData.title, "string")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("waiting_period_days"),
-        val: nativeToScVal(policyData.waitingPeriodDays, "u64")
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol("yearly_premium"),
-        val: nativeToScVal(policyData.yearlyPremium, "i128")
-      }),
-    ];
+    const contract = await getWriteContract();
 
-    // Create ScMap from entries
-    const paramsStruct = StellarSdk.xdr.ScVal.scvMap(mapEntries);
+    // Convert INR to string ETH amount, then parse to wei
+    const monthlyPremiumWei = ethers.parseEther((policyData.monthlyPremium / INR_TO_ETH_RATE).toFixed(18));
+    const yearlyPremiumWei = ethers.parseEther((policyData.yearlyPremium / INR_TO_ETH_RATE).toFixed(18));
+    const coverageAmountWei = ethers.parseEther((policyData.coverageAmount / INR_TO_ETH_RATE).toFixed(18));
 
-    console.log("Creating policy with params:", policyData);
-    console.log("Encoded struct:", paramsStruct);
+    console.log("Creating policy with params:", {
+      ...policyData,
+      monthlyPremiumWei: monthlyPremiumWei.toString(),
+      yearlyPremiumWei: yearlyPremiumWei.toString(),
+      coverageAmountWei: coverageAmountWei.toString(),
+    });
 
-    const args = [
-      nativeToScVal(publicKey, "address"),
-      paramsStruct,
-    ];
+    // Pass as struct (tuple)
+    const tx = await contract.createPolicy({
+      title: policyData.title,
+      description: policyData.description,
+      policyType: policyData.policyType,
+      monthlyPremium: monthlyPremiumWei,
+      yearlyPremium: yearlyPremiumWei,
+      coverageAmount: coverageAmountWei,
+      minAge: policyData.minAge,
+      maxAge: policyData.maxAge,
+      durationDays: policyData.durationDays,
+      waitingPeriodDays: policyData.waitingPeriodDays,
+    });
 
-    return await invokeContract("create_policy", args);
-  } catch (error) {
+    const receipt = await tx.wait();
+    console.log("✅ Policy created:", receipt.hash);
+    return { success: true, transactionHash: receipt.hash };
+  } catch (error: any) {
     console.error("Error creating policy:", error);
     throw error;
   }
 }
 
-/**
- * Purchase a policy with payment, NFT minting, and policyholder details
- */
+export async function getAllPolicies(): Promise<BlockchainPolicy[]> {
+  try {
+    const contract = getReadContract();
+    const policies = await contract.getAllPolicies();
+
+    return policies.map((p: any) => ({
+      policy_id: p.policyId.toString(),
+      title: p.title,
+      description: p.description,
+      policy_type: Number(p.policyType),
+      // Convert Wei → INR so all pages can safely parseInt() these as INR values
+      monthly_premium: convertETHToINR(p.monthlyPremium).toString(),
+      yearly_premium: convertETHToINR(p.yearlyPremium).toString(),
+      coverage_amount: convertETHToINR(p.coverageAmount).toString(),
+      min_age: p.minAge.toString(),
+      max_age: p.maxAge.toString(),
+      duration_days: p.durationDays.toString(),
+      waiting_period_days: p.waitingPeriodDays.toString(),
+      status: POLICY_STATUS_ACTIVE,
+      created_at: p.createdAt.toString(),
+      created_by: p.createdBy,
+    }));
+  } catch (error) {
+    console.error("Error getting all policies:", error);
+    return [];
+  }
+}
+
 export async function purchasePolicy(
   policyId: any,
   metadataUri: string,
@@ -563,334 +435,75 @@ export async function purchasePolicy(
       throw new Error("Invalid premium amount");
     }
 
-    // Convert INR to XLM (in stroops)
-    const monthlyPremiumXLM = convertINRToXLM(monthlyPremiumINR);
+    const premiumInEth = convertINRToETH(monthlyPremiumINR);
+    const premiumWei = ethers.parseEther(premiumInEth.toString());
 
     console.log(`💰 Payment Details:
     - Policy ID: ${numericPolicyId}
-    - Monthly Premium: ${monthlyPremiumINR} INR = ${formatXLM(monthlyPremiumXLM)}
-    - XLM Amount (stroops): ${monthlyPremiumXLM}
-    - Rate: 1 XLM = ${INR_TO_XLM_RATE / XLM_DECIMALS} INR`);
+    - Monthly Premium: ${monthlyPremiumINR} INR = ${premiumInEth} ETH
+    - Wei Amount: ${premiumWei.toString()}`);
 
-    const publicKey = await getWalletPublicKey();
-    
-    // Get native XLM token address (SAC - Stellar Asset Contract)
-    const nativeToken = StellarSdk.Asset.native();
-    const nativeTokenAddress = nativeToken.contractId(STELLAR_NETWORK);
+    const contract = await getWriteContract();
 
-    const args = [
-      nativeToScVal(publicKey, "address"),
-      nativeToScVal(numericPolicyId, "u64"),
-      nativeToScVal(metadataUri, "string"),
-      nativeToScVal(monthlyPremiumXLM, "i128"),
-      nativeToScVal(nativeTokenAddress, "address"),
-      nativeToScVal(policyholderDetails.name, "string"),
-      nativeToScVal(policyholderDetails.age, "u64"),
-      nativeToScVal(policyholderDetails.gender, "string"),
-      nativeToScVal(policyholderDetails.bloodGroup, "string"),
-    ];
+    // Pass as struct
+    const tx = await contract.purchasePolicy(
+      {
+        policyId: numericPolicyId,
+        metadataUri: metadataUri,
+        holderName: policyholderDetails.name,
+        holderAge: policyholderDetails.age,
+        holderGender: policyholderDetails.gender,
+        holderBloodGroup: policyholderDetails.bloodGroup,
+      },
+      { value: premiumWei }
+    );
 
-    const result = await invokeContract("purchase_policy", args);
+    const receipt = await tx.wait();
+    console.log("✅ Policy purchased:", receipt.hash);
 
     return {
-      ...result,
-      paymentAmount: monthlyPremiumXLM,
+      success: true,
+      transactionHash: receipt.hash,
+      paymentAmount: Number(premiumWei),
       paymentAmountINR: monthlyPremiumINR,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error purchasing policy:", error);
     throw error;
   }
 }
 
-/**
- * Get all available policies
- */
-export async function getAllPolicies(): Promise<BlockchainPolicy[]> {
-  try {
-    const result = await simulateContract("get_all_policies", []);
-    const policies = scValToNative(result);
-    
-    // Convert to expected format
-    return policies.map((p: any) => ({
-      policy_id: p.policy_id.toString(),
-      title: p.title,
-      description: p.description,
-      policy_type: p.policy_type,
-      monthly_premium: p.monthly_premium.toString(),
-      yearly_premium: p.yearly_premium.toString(),
-      coverage_amount: p.coverage_amount.toString(),
-      min_age: p.min_age.toString(),
-      max_age: p.max_age.toString(),
-      duration_days: p.duration_days.toString(),
-      waiting_period_days: p.waiting_period_days.toString(),
-      status: POLICY_STATUS_ACTIVE,
-      created_at: p.created_at.toString(),
-      created_by: p.created_by,
-    }));
-  } catch (error) {
-    console.error("Error getting all policies:", error);
-    return [];
-  }
-}
-
-/**
- * Get user's purchased policies
- */
 export async function getUserPolicies(walletAddress: string): Promise<BlockchainUserPolicy[]> {
   try {
-    const args = [nativeToScVal(walletAddress, "address")];
-    const result = await simulateContract("get_my_policies", args);
-    const policies = scValToNative(result);
+    const contract = getReadContract();
+    const policies = await contract.getMyPolicies(walletAddress);
 
     return policies.map((p: any) => ({
-      id: p.policy_id.toString(),
-      policy_id: p.policy_id.toString(),
-      user_address: p.user_address,
-      purchase_date: p.purchase_date.toString(),
-      expiry_date: p.expiry_date.toString(),
-      premium_paid: p.premium_paid_xlm.toString(),
+      id: p.policyId.toString(),
+      policy_id: p.policyId.toString(),
+      user_address: p.userAddress,
+      purchase_date: p.purchaseDate.toString(),
+      expiry_date: p.expiryDate.toString(),
+      // Convert Wei → INR so display pages can safely parseInt() as INR
+      premium_paid: convertETHToINR(p.premiumPaidWei).toString(),
       status: p.active ? USER_POLICY_STATUS_ACTIVE : USER_POLICY_STATUS_EXPIRED,
-      token_id: p.token_id,
-      metadata_uri: p.metadata_uri,
+      token_id: p.tokenId,
+      metadata_uri: p.metadataUri,
     }));
-  } catch (error) {
+  } catch (error: any) {
+    if (error.reason && error.reason.includes("User not registered")) {
+      console.log("User not registered yet. Returning no policies.");
+      return [];
+    }
     console.error("Error getting user policies:", error);
     return [];
   }
 }
 
-/**
- * Check if portal is initialized
- */
-export async function isPortalInitialized(): Promise<boolean> {
-  try {
-    const result = await simulateContract("is_initialized", []);
-    return scValToNative(result);
-  } catch (error) {
-    console.error("Error checking portal initialization:", error);
-    return false;
-  }
-}
+// ==========================================
+// Claims Functions
+// ==========================================
 
-/**
- * Alias for isPortalInitialized - Check if contract is initialized
- */
-export async function isContractInitialized(): Promise<boolean> {
-  return isPortalInitialized();
-}
-
-/**
- * Helper function to convert policy type number to string
- */
-export function getPolicyTypeString(policyType: number): string {
-  switch (policyType) {
-    case POLICY_TYPE_HEALTH:
-      return "Health";
-    case POLICY_TYPE_LIFE:
-      return "Life";
-    case POLICY_TYPE_AUTO:
-      return "Auto";
-    case POLICY_TYPE_HOME:
-      return "Home";
-    case POLICY_TYPE_TRAVEL:
-      return "Travel";
-    default:
-      return "Unknown";
-  }
-}
-
-/**
- * Helper function to convert string policy type to number
- */
-export function getPolicyTypeNumber(policyType: string): number {
-  switch (policyType.toLowerCase()) {
-    case "health":
-      return POLICY_TYPE_HEALTH;
-    case "life":
-      return POLICY_TYPE_LIFE;
-    case "auto":
-      return POLICY_TYPE_AUTO;
-    case "home":
-      return POLICY_TYPE_HOME;
-    case "travel":
-      return POLICY_TYPE_TRAVEL;
-    default:
-      return POLICY_TYPE_HEALTH;
-  }
-}
-
-/**
- * Helper function to format amounts
- */
-export function formatAmount(amount: string): number {
-  return parseInt(amount, 10);
-}
-
-/**
- * Helper function to format date
- */
-export function formatDate(timestamp: string): string {
-  const date = new Date(parseInt(timestamp, 10) * 1000);
-  return date.toLocaleDateString();
-}
-
-/**
- * Get NFT metadata by token ID
- */
-export async function getNFTMetadata(tokenId: string): Promise<PolicyNFTMetadata | null> {
-  try {
-    const args = [nativeToScVal(tokenId, "string")];
-    const result = await simulateContract("get_nft_metadata", args);
-    const metadata = scValToNative(result);
-
-    return {
-      name: metadata.name,
-      description: metadata.description,
-      image_uri: metadata.image_uri,
-      coverage_amount: metadata.coverage_amount.toString(),
-      validity_start: metadata.validity_start.toString(),
-      validity_end: metadata.validity_end.toString(),
-      premium_amount: metadata.premium_amount.toString(),
-      policy_type: metadata.policy_type,
-      holder_name: metadata.holder_name || "",
-      holder_age: metadata.holder_age?.toString() || "0",
-      holder_gender: metadata.holder_gender || "",
-      holder_blood_group: metadata.holder_blood_group || "",
-    };
-  } catch (error) {
-    console.error("Error getting NFT metadata:", error);
-    return null;
-  }
-}
-
-/**
- * Get all tokens owned by user
- */
-export async function getUserTokens(walletAddress: string): Promise<string[]> {
-  try {
-    const args = [nativeToScVal(walletAddress, "address")];
-    const result = await simulateContract("get_user_tokens", args);
-    return scValToNative(result);
-  } catch (error) {
-    console.error("Error getting user tokens:", error);
-    return [];
-  }
-}
-
-/**
- * Get all tokens for a specific policy
- */
-export async function getPolicyTokens(policyId: number): Promise<string[]> {
-  try {
-    const args = [nativeToScVal(policyId, "u64")];
-    const result = await simulateContract("get_policy_tokens", args);
-    return scValToNative(result);
-  } catch (error) {
-    console.error("Error getting policy tokens:", error);
-    return [];
-  }
-}
-
-/**
- * Get total tokens minted
- */
-export async function getTotalTokens(): Promise<number> {
-  try {
-    const result = await simulateContract("get_total_tokens", []);
-    return scValToNative(result);
-  } catch (error) {
-    console.error("Error getting total tokens:", error);
-    return 0;
-  }
-}
-
-/**
- * Generate metadata for policy NFT with policyholder details
- */
-export function generatePolicyMetadata(
-  policy: BlockchainPolicy, 
-  userAddress: string,
-  policyholderDetails?: {
-    name: string;
-    age: number;
-    gender: string;
-    bloodGroup: string;
-  }
-): any {
-  const attributes = [
-    {
-      trait_type: "Coverage",
-      value: `${formatAmount(policy.coverage_amount)} INR`,
-    },
-    {
-      trait_type: "Premium",
-      value: `${formatAmount(policy.yearly_premium)} INR/year`,
-    },
-    {
-      trait_type: "Policy Type",
-      value: getPolicyTypeString(policy.policy_type),
-    },
-    {
-      trait_type: "Duration",
-      value: `${policy.duration_days} days`,
-    },
-    {
-      trait_type: "Minimum Age",
-      value: policy.min_age,
-    },
-    {
-      trait_type: "Maximum Age",
-      value: policy.max_age,
-    },
-    {
-      trait_type: "Policyholder",
-      value: userAddress,
-    },
-    {
-      trait_type: "Created At",
-      value: formatDate(policy.created_at),
-    },
-  ];
-
-  // Add policyholder details to attributes if provided
-  if (policyholderDetails) {
-    attributes.push(
-      {
-        trait_type: "Holder Name",
-        value: policyholderDetails.name,
-      },
-      {
-        trait_type: "Holder Age",
-        value: policyholderDetails.age.toString(),
-      },
-      {
-        trait_type: "Holder Gender",
-        value: policyholderDetails.gender,
-      },
-      {
-        trait_type: "Holder Blood Group",
-        value: policyholderDetails.bloodGroup,
-      }
-    );
-  }
-
-  return {
-    name: `${policy.title} #${policy.policy_id}`,
-    description: `${policy.description} - NFT Certificate for TrustLynk Insurance Policy`,
-    image: "https://trustlynk.io/policy-nft.png",
-    attributes,
-    external_url: `https://trustlynk.io/policy/${policy.policy_id}`,
-    collection: {
-      name: "TrustLynk Insurance Policies",
-      family: "TrustLynk",
-    },
-  };
-}
-
-/**
- * Claim policy with fraud detection
- */
 export async function claimPolicy(
   policyId: any,
   aggregateScore: number
@@ -908,78 +521,109 @@ export async function claimPolicy(
       aggregateScore <= 30 ? "APPROVED" : aggregateScore <= 70 ? "PENDING" : "REJECTED"
     }`);
 
-    const publicKey = await getWalletPublicKey();
-    
-    // Get native XLM token address
-    const nativeToken = StellarSdk.Asset.native();
-    const nativeTokenAddress = nativeToken.contractId(STELLAR_NETWORK);
+    const contract = await getWriteContract();
 
-    const args = [
-      nativeToScVal(publicKey, "address"),
-      nativeToScVal(numericPolicyId, "u64"),
-      nativeToScVal(aggregateScore, "u32"),
-      nativeToScVal(nativeTokenAddress, "address"),
-    ];
+    // Pass as struct
+    const tx = await contract.claimPolicy({
+      policyId: numericPolicyId,
+      aggregateScore: aggregateScore,
+      abhaId: "",
+      ipfsCid: "",
+      oracleRequestId: "",
+      claimDescription: "",
+      hospitalName: "",
+    });
 
-    const result = await invokeContract("claim_policy", args);
+    const receipt = await tx.wait();
+    console.log("✅ Claim submitted:", receipt.hash);
 
-    // Get policy details for claim amount
     const policies = await getAllPolicies();
     const policy = policies.find((p) => p.policy_id === numericPolicyId.toString());
     const claimAmount = policy ? parseInt(policy.coverage_amount) : 0;
 
     return {
-      ...result,
+      success: true,
+      transactionHash: receipt.hash,
       claimAmount,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error claiming policy:", error);
     throw error;
   }
 }
 
-/**
- * Get user claims
- */
+export async function claimPolicyWithOracle(
+  policyId: number,
+  aggregateScore: number,
+  abhaId: string,
+  ipfsCid: string,
+  oracleRequestId: string,
+  claimDescription: string,
+  hospitalName: string
+): Promise<{ success: boolean; transactionHash?: string }> {
+  try {
+    const contract = await getWriteContract();
+
+    const tx = await contract.claimPolicy({
+      policyId: policyId,
+      aggregateScore: aggregateScore,
+      abhaId: abhaId,
+      ipfsCid: ipfsCid,
+      oracleRequestId: oracleRequestId,
+      claimDescription: claimDescription,
+      hospitalName: hospitalName,
+    });
+
+    const receipt = await tx.wait();
+    console.log("✅ Claim with oracle data submitted:", receipt.hash);
+    return { success: true, transactionHash: receipt.hash };
+  } catch (error: any) {
+    console.error("Error claiming with oracle:", error);
+    throw error;
+  }
+}
+
 export async function getUserClaims(userAddress: string): Promise<PolicyClaim[]> {
   try {
-    const args = [nativeToScVal(userAddress, "address")];
-    const result = await simulateContract("get_user_claims", args);
-    const claims = scValToNative(result);
+    const contract = getReadContract();
+    const claims = await contract.getUserClaims(userAddress);
 
     return claims.map((claim: any) => ({
-      claim_id: claim.claim_id.toString(),
-      policy_id: claim.policy_id.toString(),
-      user_address: claim.user_address,
-      claim_amount: claim.claim_amount.toString(),
-      aggregate_score: claim.aggregate_score,
-      status: claim.status,
-      claimed_at: claim.claimed_at.toString(),
-      processed_at: claim.processed_at.toString(),
+      claim_id: claim.claimId.toString(),
+      policy_id: claim.policyId.toString(),
+      user_address: claim.userAddress,
+      // Convert Wei → INR so display pages can safely parseInt() as INR
+      claim_amount: convertETHToINR(claim.claimAmount).toString(),
+      aggregate_score: Number(claim.aggregateScore),
+      status: Number(claim.status),
+      claimed_at: claim.claimedAt.toString(),
+      processed_at: claim.processedAt.toString(),
     }));
-  } catch (error) {
-    console.error("Error fetching user claims:", error);
+  } catch (error: any) {
+    if (error.reason && error.reason.includes("User not registered")) {
+      console.log("User not registered yet. Returning no claims.");
+      return [];
+    }
+    console.error("Error getting user claims:", error);
     return [];
   }
 }
 
-/**
- * Get all claims (admin only)
- */
 export async function getAllClaims(): Promise<PolicyClaim[]> {
   try {
-    const result = await simulateContract("get_all_claims", []);
-    const claims = scValToNative(result);
+    const contract = getReadContract();
+    const claims = await contract.getAllClaims();
 
     return claims.map((claim: any) => ({
-      claim_id: claim.claim_id.toString(),
-      policy_id: claim.policy_id.toString(),
-      user_address: claim.user_address,
-      claim_amount: claim.claim_amount.toString(),
-      aggregate_score: claim.aggregate_score,
-      status: claim.status,
-      claimed_at: claim.claimed_at.toString(),
-      processed_at: claim.processed_at.toString(),
+      claim_id: claim.claimId.toString(),
+      policy_id: claim.policyId.toString(),
+      user_address: claim.userAddress,
+      // Convert Wei → INR so display pages can safely parseInt() as INR
+      claim_amount: convertETHToINR(claim.claimAmount).toString(),
+      aggregate_score: Number(claim.aggregateScore),
+      status: Number(claim.status),
+      claimed_at: claim.claimedAt.toString(),
+      processed_at: claim.processedAt.toString(),
     }));
   } catch (error) {
     console.error("Error fetching all claims:", error);
@@ -987,23 +631,17 @@ export async function getAllClaims(): Promise<PolicyClaim[]> {
   }
 }
 
-/**
- * Get claim status
- */
-export async function getClaimStatus(claimId: number): Promise<{
-  status: number;
-  amount: string;
-  score: number;
-} | null> {
+export async function getClaimStatus(
+  claimId: number
+): Promise<{ status: number; amount: string; score: number } | null> {
   try {
-    const args = [nativeToScVal(claimId, "u64")];
-    const result = await simulateContract("get_claim_status", args);
-    const [status, amount, score] = scValToNative(result);
+    const contract = getReadContract();
+    const [status, amount, score] = await contract.getClaimStatus(claimId);
 
     return {
-      status,
+      status: Number(status),
       amount: amount.toString(),
-      score,
+      score: Number(score),
     };
   } catch (error) {
     console.error("Error fetching claim status:", error);
@@ -1011,78 +649,215 @@ export async function getClaimStatus(claimId: number): Promise<{
   }
 }
 
-/**
- * Approve claim (admin only)
- */
-export async function approveClaim(claimId: number): Promise<{ success: boolean; transactionHash?: string }> {
+export async function approveClaim(
+  claimId: number
+): Promise<{ success: boolean; transactionHash?: string }> {
   try {
     console.log(`✅ Approving claim ID: ${claimId}`);
-
-    const publicKey = await getWalletPublicKey();
-    
-    // Get native XLM token address
-    const nativeToken = StellarSdk.Asset.native();
-    const nativeTokenAddress = nativeToken.contractId(STELLAR_NETWORK);
-
-    const args = [
-      nativeToScVal(publicKey, "address"),
-      nativeToScVal(claimId, "u64"),
-      nativeToScVal(nativeTokenAddress, "address"),
-    ];
-
-    return await invokeContract("approve_claim", args);
-  } catch (error) {
+    const contract = await getWriteContract();
+    const tx = await contract.approveClaim(claimId);
+    const receipt = await tx.wait();
+    return { success: true, transactionHash: receipt.hash };
+  } catch (error: any) {
     console.error("Error approving claim:", error);
     throw error;
   }
 }
 
-// Utility functions for claim status
+// ==========================================
+// Portal / Contract Status
+// ==========================================
+
+export async function isPortalInitialized(): Promise<boolean> {
+  try {
+    const contract = getReadContract();
+    return await contract.isInitialized();
+  } catch (error) {
+    console.error("Error checking portal initialization:", error);
+    return false;
+  }
+}
+
+export async function isContractInitialized(): Promise<boolean> {
+  return isPortalInitialized();
+}
+
+// ==========================================
+// NFT / Token Functions
+// ==========================================
+
+export async function getNFTMetadata(tokenId: string): Promise<PolicyNFTMetadata | null> {
+  try {
+    const contract = getReadContract();
+    const metadata = await contract.getNFTMetadata(tokenId);
+
+    return {
+      name: metadata.name,
+      description: metadata.description,
+      image_uri: metadata.imageUri,
+      coverage_amount: metadata.coverageAmount.toString(),
+      validity_start: metadata.validityStart.toString(),
+      validity_end: metadata.validityEnd.toString(),
+      premium_amount: metadata.premiumAmount.toString(),
+      policy_type: Number(metadata.policyType),
+      holder_name: metadata.holderName || "",
+      holder_age: metadata.holderAge?.toString() || "0",
+      holder_gender: metadata.holderGender || "",
+      holder_blood_group: metadata.holderBloodGroup || "",
+    };
+  } catch (error) {
+    console.error("Error getting NFT metadata:", error);
+    return null;
+  }
+}
+
+export async function getUserTokens(walletAddress: string): Promise<string[]> {
+  try {
+    const contract = getReadContract();
+    return await contract.getUserTokensList(walletAddress);
+  } catch (error) {
+    console.error("Error getting user tokens:", error);
+    return [];
+  }
+}
+
+export async function getPolicyTokens(policyId: number): Promise<string[]> {
+  try {
+    const contract = getReadContract();
+    return await contract.getPolicyTokensList(policyId);
+  } catch (error) {
+    console.error("Error getting policy tokens:", error);
+    return [];
+  }
+}
+
+export async function getTotalTokens(): Promise<number> {
+  try {
+    const contract = getReadContract();
+    const total = await contract.getTotalTokens();
+    return Number(total);
+  } catch (error) {
+    console.error("Error getting total tokens:", error);
+    return 0;
+  }
+}
+
+// ==========================================
+// Helper Functions
+// ==========================================
+
+export function getPolicyTypeString(policyType: number): string {
+  switch (policyType) {
+    case POLICY_TYPE_HEALTH: return "Health";
+    case POLICY_TYPE_LIFE: return "Life";
+    case POLICY_TYPE_AUTO: return "Auto";
+    case POLICY_TYPE_HOME: return "Home";
+    case POLICY_TYPE_TRAVEL: return "Travel";
+    default: return "Unknown";
+  }
+}
+
+export function getPolicyTypeNumber(policyType: string): number {
+  switch (policyType.toLowerCase()) {
+    case "health": return POLICY_TYPE_HEALTH;
+    case "life": return POLICY_TYPE_LIFE;
+    case "auto": return POLICY_TYPE_AUTO;
+    case "home": return POLICY_TYPE_HOME;
+    case "travel": return POLICY_TYPE_TRAVEL;
+    default: return POLICY_TYPE_HEALTH;
+  }
+}
+
+export function formatAmount(amount: string): number {
+  return parseInt(amount, 10);
+}
+
+export function formatDate(timestamp: string): string {
+  const date = new Date(parseInt(timestamp, 10) * 1000);
+  return date.toLocaleDateString();
+}
+
 export function getClaimStatusString(status: number): string {
   switch (status) {
-    case 1:
-      return "Approved";
-    case 2:
-      return "Pending Verification";
-    case 3:
-      return "Rejected";
-    default:
-      return "Unknown";
+    case 1: return "Approved";
+    case 2: return "Pending Verification";
+    case 3: return "Rejected";
+    default: return "Unknown";
   }
 }
 
 export function getClaimStatusColor(status: number): string {
   switch (status) {
-    case 1:
-      return "text-green-600 bg-green-50";
-    case 2:
-      return "text-yellow-600 bg-yellow-50";
-    case 3:
-      return "text-red-600 bg-red-50";
-    default:
-      return "text-gray-600 bg-gray-50";
+    case 1: return "text-green-600 bg-green-50";
+    case 2: return "text-yellow-600 bg-yellow-50";
+    case 3: return "text-red-600 bg-red-50";
+    default: return "text-gray-600 bg-gray-50";
   }
 }
 
-// Helper function to get policy by ID (not in original but useful)
+export function generatePolicyMetadata(
+  policy: BlockchainPolicy,
+  userAddress: string,
+  policyholderDetails?: {
+    name: string;
+    age: number;
+    gender: string;
+    bloodGroup: string;
+  }
+): any {
+  const attributes = [
+    { trait_type: "Coverage", value: `${formatETH(BigInt(policy.coverage_amount))}` },
+    { trait_type: "Premium", value: `${formatETH(BigInt(policy.yearly_premium))}/year` },
+    { trait_type: "Policy Type", value: getPolicyTypeString(policy.policy_type) },
+    { trait_type: "Duration", value: `${policy.duration_days} days` },
+    { trait_type: "Minimum Age", value: policy.min_age },
+    { trait_type: "Maximum Age", value: policy.max_age },
+    { trait_type: "Policyholder", value: userAddress },
+    { trait_type: "Created At", value: formatDate(policy.created_at) },
+  ];
+
+  if (policyholderDetails) {
+    attributes.push(
+      { trait_type: "Holder Name", value: policyholderDetails.name },
+      { trait_type: "Holder Age", value: policyholderDetails.age.toString() },
+      { trait_type: "Holder Gender", value: policyholderDetails.gender },
+      { trait_type: "Holder Blood Group", value: policyholderDetails.bloodGroup }
+    );
+  }
+
+  return {
+    name: `${policy.title} #${policy.policy_id}`,
+    description: `${policy.description} - NFT Certificate for TrustLynk Insurance Policy`,
+    image: "https://trustlynk.io/policy-nft.png",
+    attributes,
+    external_url: `https://trustlynk.io/policy/${policy.policy_id}`,
+    collection: {
+      name: "TrustLynk Insurance Policies",
+      family: "TrustLynk",
+    },
+  };
+}
+
 export async function getPolicy(policyId: string): Promise<BlockchainPolicy | null> {
   const policies = await getAllPolicies();
   return policies.find((p) => p.policy_id === policyId) || null;
 }
 
-// Collection info functions
 export async function getCollectionInfo(): Promise<{
   name: string;
   description: string;
   uri: string;
 } | null> {
-  // Hardcoded for now as Soroban doesn't have built-in NFT collections
   return {
     name: "TrustLynk Insurance Policies",
-    description: "NFT collection representing insurance policies on TrustLynk platform powered by Stellar blockchain",
+    description: "NFT collection representing insurance policies on TrustLynk platform powered by Ethereum blockchain",
     uri: "https://trustlynk.io/collection.json",
   };
 }
 
-
-
+// Type declaration for MetaMask
+declare global {
+  interface Window {
+    ethereum: any;
+  }
+}

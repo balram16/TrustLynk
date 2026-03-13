@@ -25,7 +25,7 @@ export default function Home() {
               <div className="inline-block">
                 <span className="inline-flex items-center rounded-full bg-[#fa6724]/10 px-4 py-2 text-sm font-medium text-[#fa6724] ring-1 ring-inset ring-[#fa6724]/20">
                   <Zap className="h-4 w-4 mr-2" />
-                  Powered by Stellar Blockchain
+                  Powered by Ethereum Blockchain
                 </span>
               </div>
               <h1 className="text-4xl md:text-5xl lg:text-7xl font-bold tracking-tight leading-tight">
@@ -288,7 +288,7 @@ const features = [
   {
     icon: <Lock className="h-8 w-8 text-[#fa6724] group-hover:text-white transition-colors" />,
     title: "Blockchain Security",
-    description: "Stellar blockchain ensures tamper-proof records with military-grade encryption and smart contract automation.",
+    description: "Ethereum blockchain ensures tamper-proof records with military-grade encryption and smart contract automation.",
   },
   {
     icon: <Heart className="h-8 w-8 text-[#07a6ec] group-hover:text-white transition-colors" />,

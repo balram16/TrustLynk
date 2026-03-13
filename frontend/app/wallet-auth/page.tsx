@@ -73,7 +73,7 @@ export default function WalletAuthPage() {
             </span>
           </h1>
           <p className="text-muted-foreground">
-            Connect your Freighter Wallet to access the platform
+            Connect your MetaMask Wallet to access the platform
           </p>
         </div>
 
@@ -87,7 +87,7 @@ export default function WalletAuthPage() {
             </div>
             <CardTitle className="text-2xl">Wallet Authentication</CardTitle>
             <CardDescription>
-              Secure, passwordless login using Stellar blockchain
+              Secure, passwordless login using Ethereum blockchain
             </CardDescription>
           </CardHeader>
 
@@ -97,7 +97,7 @@ export default function WalletAuthPage() {
               <div className="space-y-4">
                 <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                   <p className="text-sm text-blue-800 dark:text-blue-200 text-center">
-                    👛 Connect your Freighter Wallet to get started
+                    👛 Connect your MetaMask Wallet to get started
                   </p>
                 </div>
 
@@ -114,20 +114,20 @@ export default function WalletAuthPage() {
                   ) : (
                     <>
                       <Wallet className="mr-2 h-5 w-5" />
-                      Connect Freighter Wallet
+                      Connect MetaMask Wallet
                     </>
                   )}
                 </Button>
 
                 <div className="text-center text-sm text-muted-foreground">
-                  <p>Don't have Freighter Wallet?</p>
+                  <p>Don't have MetaMask?</p>
                   <a
-                    href="https://www.freighter.app/"
+                    href="https://metamask.io/download/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[#07a6ec] hover:underline"
                   >
-                    Install Freighter Extension →
+                    Install MetaMask Extension →
                   </a>
                 </div>
               </div>
@@ -261,7 +261,7 @@ export default function WalletAuthPage() {
 
         {/* Footer Info */}
         <div className="mt-6 text-center text-sm text-muted-foreground">
-          <p>Secured by Stellar Blockchain</p>
+          <p>Secured by Ethereum Blockchain</p>
           <p className="text-xs mt-1">All transactions are recorded on-chain</p>
         </div>
       </div>

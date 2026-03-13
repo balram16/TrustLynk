@@ -22,12 +22,13 @@ import { useFreighterWallet } from "@/context/freighter-wallet-context"
 import { useToast } from "@/components/ui/use-toast"
 import { 
   getAllClaims,
+  approveClaim,
   getClaimStatusString,
   getClaimStatusColor,
   CLAIM_STATUS_APPROVED,
   CLAIM_STATUS_PENDING,
   CLAIM_STATUS_REJECTED,
-  convertXLMToINR
+  convertETHToINR
 } from "@/lib/blockchain"
 
 export const dynamic = 'force-dynamic'
@@ -38,6 +39,7 @@ export default function AllClaimsPage() {
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [approvingId, setApprovingId] = useState<string | null>(null)
   
   const { walletAddress, userRole } = useFreighterWallet()
   const { toast } = useToast()
@@ -59,7 +61,7 @@ export default function AllClaimsPage() {
         policy_id: c.policy_id,
         user_address: c.user_address,
         claim_amount: parseInt(c.claim_amount),
-        claim_amount_inr: convertXLMToINR(parseInt(c.claim_amount)),
+        claim_amount_inr: parseInt(c.claim_amount),
         aggregate_score: Number(c.aggregate_score),
         status: Number(c.status),
         status_string: getClaimStatusString(Number(c.status)),
@@ -78,6 +80,18 @@ export default function AllClaimsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleApproveClaim = async (claimId: string) => {
+    setApprovingId(claimId)
+    try {
+      await approveClaim(Number(claimId))
+      await fetchClaims()
+    } catch (error: any) {
+      console.error("Error approving claim:", error)
+    } finally {
+      setApprovingId(null)
     }
   }
 
@@ -408,8 +422,12 @@ export default function AllClaimsPage() {
                         <Button variant="outline" className="border-red-500 text-red-500 hover:bg-red-50">
                           Reject Claim
                         </Button>
-                        <Button className="bg-green-600 hover:bg-green-700">
-                          Approve Claim
+                        <Button 
+                          className="bg-green-600 hover:bg-green-700"
+                          disabled={approvingId === claim.claim_id}
+                          onClick={() => handleApproveClaim(claim.claim_id)}
+                        >
+                          {approvingId === claim.claim_id ? "Approving..." : "Approve Claim"}
                         </Button>
                       </>
                     )}

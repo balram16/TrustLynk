@@ -10,7 +10,7 @@ import Image from "next/image"
 export default function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<{ role: string; content: string; image?: string }[]>([
     {
       role: "assistant",
       content: "Hi there! I'm Claim Saathi, your AI assistant. How can I help you with your insurance claims today?",
@@ -19,7 +19,7 @@ export default function ChatbotWidget() {
   ])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const messagesEndRef = useRef(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -27,7 +27,7 @@ export default function ChatbotWidget() {
     }
   }, [messages])
 
-  const handleSendMessage = async (e) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim()) return
 

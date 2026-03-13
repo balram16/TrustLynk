@@ -45,7 +45,7 @@ const claimWorkflow = {
       timestamp: "2024-03-21 10:35:00",
       details: "Smart contract verification in progress"
     }
-  ],
+  ] as ClaimStage[],
   metrics: {
     completionPercentage: 65,
     estimatedTime: "10 minutes",

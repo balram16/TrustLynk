@@ -23,8 +23,8 @@ import { useToast } from "@/components/ui/use-toast"
 import { 
   getAllPolicies, 
   getPolicyTypeString,
-  convertXLMToINR,
-  formatXLM
+  convertETHToINR,
+  formatETH
 } from "@/lib/blockchain"
 import { useRouter } from "next/navigation"
 
@@ -140,7 +140,7 @@ export default function ProviderPoliciesPage() {
             Refresh
           </Button>
           <Button 
-            onClick={() => router.push('/dashboard/admin')}
+            onClick={() => router.push('/dashboard/provider/policies/create')}
             className="bg-gradient-to-r from-[#fa6724] to-[#e55613]"
           >
             <Plus className="h-4 w-4 mr-2" />

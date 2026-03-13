@@ -351,8 +351,9 @@ class RuleEngine:
         alerts = [];
         if self.abha.name.lower() not in self.pdf_lower: alerts.append("Name Mismatch")
         if self.abha.dob not in self.pdf_text: alerts.append("DOB Mismatch")
-        try: abha_city = self.abha.address.split(',')[-1].strip().lower();
-        if abha_city not in self.pdf_lower: alerts.append(f"City Mismatch ('{abha_city}')")
+        try:
+            abha_city = self.abha.address.split(',')[-1].strip().lower()
+            if abha_city not in self.pdf_lower: alerts.append(f"City Mismatch ('{abha_city}')")
         except: pass
         if alerts: self.risk_score += 70; self.red_flags.append(f"Identity Fail: {', '.join(alerts)}.")
         self.detailed_analysis.append("Analysis (Rule 1): Checked Bill vs ABHA identity (Name, DOB, City).")
@@ -465,8 +466,9 @@ class RuleEngine:
         if not history or not self.extracted["bill_date"]: self.detailed_analysis.append("Analysis (Rule 4): Checked claim frequency (No prior history or bill date)."); return;
         claims_in_last_month = 0; current_claim_date = self.extracted["bill_date"];
         for claim in history:
-            try: past_claim_date = date_parse(claim["claim_date"], dayfirst=True);
-            if 0 < (current_claim_date - past_claim_date).days <= 30: claims_in_last_month += 1
+            try:
+                past_claim_date = date_parse(claim["claim_date"], dayfirst=True)
+                if 0 < (current_claim_date - past_claim_date).days <= 30: claims_in_last_month += 1
             except: continue
         if claims_in_last_month >= 2: self.risk_score += 20; self.red_flags.append(f"History Risk: High claim frequency ({claims_in_last_month + 1} claims within ~30 days).");
         self.detailed_analysis.append(f"Analysis (Rule 4): Checked claim frequency ({claims_in_last_month} other claims in ~30 days found in Mock History).")

@@ -35,8 +35,8 @@ import {
   generatePolicyMetadata,
   getUserTokens,
   getNFTMetadata,
-  convertINRToXLM,
-  formatXLM,
+  convertINRToETH,
+  formatETH,
   registerAsPolicyholder,
   ROLE_POLICYHOLDER,
   claimPolicy,
@@ -201,7 +201,7 @@ export default function UserDashboard() {
         description: "You have been registered as a policyholder and can now purchase policies",
       })
       // Refresh user role
-      await checkUserRole(walletAddress)
+      await checkUserRole()
     } catch (error) {
       toast({
         title: "Registration Failed",
@@ -383,7 +383,7 @@ export default function UserDashboard() {
         })
         
         if (result.success) {
-          const xlmAmount = convertINRToXLM(monthlyPremiumINR)
+          const ethAmount = convertINRToETH(monthlyPremiumINR)
           toast({
             title: "🎉 Policy NFT Minted Successfully!",
             description: `Payment: ₹${monthlyPremiumINR} processed. NFT Certificate created for ${details.name}! TX: ${result.transactionHash?.slice(0, 8)}...`,
@@ -459,25 +459,68 @@ export default function UserDashboard() {
 
       const claimAmountINR = userPolicy.policy.coverage.amount
 
-      // Generate aggregate score from fraud detection (0-100)
-      // Lower score = less fraud risk = higher chance of approval
-      const fraudResult = await fraudDetectionAPI.analyzeInsuranceClaim({
-        claimAmount: claimAmountINR,
-        policyType: userPolicy.policy.type,
-        claimDescription: claimDetails,
-        userHistory: { previousClaims: userClaims.length }
+      const claimDetails = "Standard policy claim";
+      const fraudResult = await fraudDetectionAPI.analyzeFraudRisk({
+        claim: {
+          claim_id: `cl_${Date.now()}`,
+          abha_id: "none",
+          policy_id: policyId,
+          claim_amount: claimAmountINR,
+          claim_date: new Date().toISOString(),
+          hospital_details: {
+            name: "Default Hospital",
+            address: "Default Address",
+            registration_number: "HOSP123",
+            doctor_name: "Dr. Default",
+            doctor_registration: "DOC123"
+          },
+          diagnosis: claimDetails,
+          treatment: "Standard Care",
+          medications: [],
+          claim_type: "cashless",
+          documents: []
+        },
+        abha_user: {
+          abhaId: "none",
+          fullName: "Policy Holder",
+          dob: "1990-01-01",
+          gender: "M",
+          bloodGroup: "O+",
+          address: { state: "State", district: "District", pincode: "000000", address: "Address" },
+          phone: "0000000000",
+          email: "test@example.com",
+          allergies: [],
+          medicalHistory: [],
+          existingInsurance: [],
+          emergencyContact: { name: "Contact", relation: "Family", phone: "0000000000" },
+          hasConsent: true
+        },
+        policy: {
+          coverage_amount: userPolicy.policy.coverage.amount.toString(),
+          created_at: new Date().toISOString(),
+          created_by: "TrustLynk",
+          description: userPolicy.policy.description,
+          duration_days: "365",
+          max_age: "65",
+          min_age: "18",
+          monthly_premium: userPolicy.policy.premium.monthly.toString(),
+          policy_id: policyId,
+          policy_type: 1,
+          title: userPolicy.policy.title,
+          waiting_period_days: "30",
+          yearly_premium: userPolicy.policy.premium.yearly.toString()
+        }
       })
       
-      const aggregateScore = Math.min(100, Math.max(0, Math.round(fraudResult.fraudScore)))
-      console.log("🎯 Fraud Detection Score:", aggregateScore, "Risk:", fraudResult.riskLevel)
+      const aggregateScore = Math.min(100, Math.max(0, Math.round(fraudResult.aggregate_score)))
+      console.log("🎯 Fraud Detection Score:", aggregateScore, "Risk:", fraudResult.risk_level)
 
       // Submit claim directly to blockchain
       // Contract will auto-approve if score <= 30, pending if 31-70, reject if > 70
       // Contract automatically transfers funds if approved!
       console.log("📝 Submitting claim to blockchain...")
       const txHash = await claimPolicy(
-        walletAddress,
-        Number(policyId),
+        policyId,
         aggregateScore
       )
       
@@ -583,7 +626,7 @@ export default function UserDashboard() {
             <Button
               onClick={() => {
                 if (walletAddress) {
-                  checkUserRole(walletAddress)
+                  checkUserRole()
                 }
                 window.location.reload()
               }}
@@ -729,7 +772,7 @@ export default function UserDashboard() {
                           ₹{policy.premium.yearly.toLocaleString()}/year
                         </p>
                         <p className="text-xs text-blue-600 mt-1">
-                          {formatXLM(convertINRToXLM(Math.floor(policy.premium.yearly / 12)))} XLM/month
+                          {formatETH(convertINRToETH(Math.floor(policy.premium.yearly / 12)))} ETH/month
                         </p>
                       </div>
                     </div>

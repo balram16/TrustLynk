@@ -32,7 +32,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useFreighterWallet } from "@/context/freighter-wallet-context"
-import type { FreighterWalletContextType } from "@/context/freighter-wallet-context"
+
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { StateRestorationNotice } from "@/components/ui/state-restoration-notice"
 import { 
@@ -149,7 +149,7 @@ export default function AdminDashboard() {
       const blockchainPolicies = await getAllPolicies();
       // Map blockchain policies to the Policy type used in the dashboard
       const mappedPolicies = blockchainPolicies.map((p) => ({
-        id: p.id,
+        id: p.policy_id,
         title: p.title,
         description: p.description,
         provider: "TrustLynk",
@@ -538,7 +538,7 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle>Create New Policy</CardTitle>
                 <CardDescription>
-                  Create a new insurance policy that will be deployed to the Stellar blockchain
+                  Create a new insurance policy that will be deployed to the Ethereum blockchain
                 </CardDescription>
               </CardHeader>
               

@@ -2,16 +2,22 @@
 import { usePathname } from "next/navigation"
 import { Building, FileText, Users, BarChart3, CheckCircle } from "lucide-react"
 
-export default function CompanyOnboardingSteps() {
+interface CompanyOnboardingStepsProps {
+  currentStep?: number;
+}
+
+export default function CompanyOnboardingSteps({ currentStep: propCurrentStep }: CompanyOnboardingStepsProps = {}) {
   const pathname = usePathname()
 
   // Determine current step based on pathname
-  let currentStep = 0
-  if (pathname?.includes("/step1")) currentStep = 1
-  if (pathname?.includes("/step2")) currentStep = 2
-  if (pathname?.includes("/step3")) currentStep = 3
-  if (pathname?.includes("/step4")) currentStep = 4
-  if (pathname?.includes("/complete")) currentStep = 5
+  let currentStep = propCurrentStep || 0
+  if (!propCurrentStep) {
+    if (pathname?.includes("/step1")) currentStep = 1
+    if (pathname?.includes("/step2")) currentStep = 2
+    if (pathname?.includes("/step3")) currentStep = 3
+    if (pathname?.includes("/step4")) currentStep = 4
+    if (pathname?.includes("/complete")) currentStep = 5
+  }
 
   const steps = [
     {

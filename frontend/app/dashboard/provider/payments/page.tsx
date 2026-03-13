@@ -17,7 +17,7 @@ import { useFreighterWallet } from "@/context/freighter-wallet-context"
 import { useToast } from "@/components/ui/use-toast"
 import { 
   getAllPolicies,
-  convertXLMToINR,
+  convertETHToINR,
   getPolicyTypeString
 } from "@/lib/blockchain"
 
@@ -91,7 +91,7 @@ export default function PaymentsPage() {
         <div>
           <h1 className="text-3xl font-bold">Premium Payments</h1>
           <p className="text-muted-foreground">
-            All payments processed via XLM on Stellar blockchain
+            All payments processed via ETH on Ethereum blockchain
           </p>
         </div>
         <Button onClick={fetchPolicies} disabled={loading} variant="outline">
@@ -143,8 +143,8 @@ export default function PaymentsPage() {
             <Wallet className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">XLM</div>
-            <p className="text-xs text-muted-foreground">Stellar blockchain</p>
+            <div className="text-2xl font-bold">ETH</div>
+            <p className="text-xs text-muted-foreground">Ethereum blockchain</p>
           </CardContent>
         </Card>
       </div>
@@ -200,8 +200,8 @@ export default function PaymentsPage() {
             <div>
               <h3 className="font-semibold text-blue-900 mb-2">Blockchain-Based Payments</h3>
               <p className="text-sm text-blue-700">
-                All premium payments are processed directly on the Stellar blockchain using XLM (Stellar Lumens). 
-                When users purchase a policy, they pay the premium in XLM which is automatically converted from INR.
+                All premium payments are processed directly on the Ethereum blockchain using ETH (Ether). 
+                When users purchase a policy, they pay the premium in ETH which is automatically converted from INR.
               </p>
               <p className="text-sm text-blue-700 mt-2">
                 <strong>Benefits:</strong> Instant settlement • Transparent transactions • No intermediaries • 

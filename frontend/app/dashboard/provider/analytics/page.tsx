@@ -26,7 +26,7 @@ import {
   CLAIM_STATUS_APPROVED,
   CLAIM_STATUS_PENDING,
   CLAIM_STATUS_REJECTED,
-  convertXLMToINR,
+  convertETHToINR,
   getPolicyTypeString
 } from "@/lib/blockchain"
 
@@ -96,7 +96,7 @@ export default function AnalyticsPage() {
     fraudDetection: {
       saved: claims
         .filter(c => Number(c.status) === CLAIM_STATUS_REJECTED)
-        .reduce((sum, c) => sum + convertXLMToINR(parseInt(c.claim_amount)), 0),
+        .reduce((sum, c) => sum + parseInt(c.claim_amount), 0),
       detected: claims.filter(c => Number(c.aggregate_score) > 70).length,
     }
   }
@@ -303,7 +303,7 @@ export default function AnalyticsPage() {
               <p className="text-2xl font-bold">
                 ₹{claims
                   .filter(c => Number(c.status) === CLAIM_STATUS_APPROVED)
-                  .reduce((sum, c) => sum + convertXLMToINR(parseInt(c.claim_amount)), 0)
+                  .reduce((sum, c) => sum + parseInt(c.claim_amount), 0)
                   .toLocaleString()}
               </p>
               <p className="text-xs text-muted-foreground">Total Payouts</p>

@@ -21,7 +21,7 @@ import {
   CLAIM_STATUS_APPROVED,
   CLAIM_STATUS_PENDING,
   CLAIM_STATUS_REJECTED,
-  convertXLMToINR
+  convertETHToINR
 } from "@/lib/blockchain"
 
 export const dynamic = 'force-dynamic'
@@ -50,7 +50,7 @@ export default function ClaimPaymentsPage() {
         policy_id: c.policy_id,
         user_address: c.user_address,
         claim_amount: parseInt(c.claim_amount),
-        claim_amount_inr: convertXLMToINR(parseInt(c.claim_amount)),
+        claim_amount_inr: parseInt(c.claim_amount),
         aggregate_score: Number(c.aggregate_score),
         status: Number(c.status),
         status_string: getClaimStatusString(Number(c.status)),
@@ -173,7 +173,7 @@ export default function ClaimPaymentsPage() {
               </p>
               <p className="text-sm text-blue-700 mt-2">
                 <strong>How it works:</strong> Smart contract holds funds in escrow → Claim submitted → AI evaluates fraud score 
-                → If approved (score ≤ 30) → Instant XLM transfer → User receives payment on-chain ✅
+                → If approved (score ≤ 30) → Instant ETH transfer → User receives payment on-chain ✅
               </p>
             </div>
           </div>

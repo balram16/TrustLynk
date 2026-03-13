@@ -20,12 +20,13 @@ import { useFreighterWallet } from "@/context/freighter-wallet-context"
 import { useToast } from "@/components/ui/use-toast"
 import { 
   getAllClaims,
+  approveClaim,
   getClaimStatusString,
   getClaimStatusColor,
   CLAIM_STATUS_APPROVED,
   CLAIM_STATUS_PENDING,
   CLAIM_STATUS_REJECTED,
-  convertXLMToINR
+  convertETHToINR
 } from "@/lib/blockchain"
 
 export const dynamic = 'force-dynamic'
@@ -35,6 +36,7 @@ export default function ClaimsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [approvingId, setApprovingId] = useState<string | null>(null)
   
   const { walletAddress, userRole } = useFreighterWallet()
   const { toast } = useToast()
@@ -56,7 +58,7 @@ export default function ClaimsPage() {
         policy_id: c.policy_id,
         user_address: c.user_address,
         claim_amount: parseInt(c.claim_amount),
-        claim_amount_inr: convertXLMToINR(parseInt(c.claim_amount)),
+        claim_amount_inr: parseInt(c.claim_amount),
         aggregate_score: Number(c.aggregate_score),
         status: Number(c.status),
         status_string: getClaimStatusString(Number(c.status)),
@@ -75,6 +77,27 @@ export default function ClaimsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleApproveClaim = async (claimId: string) => {
+    setApprovingId(claimId)
+    try {
+      await approveClaim(Number(claimId))
+      toast({
+        title: "✅ Claim Approved",
+        description: `Claim #${claimId} approved. Funds transferred to policyholder.`,
+      })
+      await fetchClaims()
+    } catch (error: any) {
+      console.error("Error approving claim:", error)
+      toast({
+        title: "Approval Failed",
+        description: error?.reason || error?.message || "Failed to approve claim",
+        variant: "destructive",
+      })
+    } finally {
+      setApprovingId(null)
     }
   }
 
@@ -339,8 +362,17 @@ export default function ClaimsPage() {
                             <p className="text-sm font-semibold text-yellow-800">
                               ⏳ Pending Review - Fraud score: {claim.aggregate_score}/100
                             </p>
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                              Approve Claim
+                            <Button 
+                              size="sm" 
+                              className="bg-green-600 hover:bg-green-700"
+                              disabled={approvingId === claim.claim_id}
+                              onClick={() => handleApproveClaim(claim.claim_id)}
+                            >
+                              {approvingId === claim.claim_id ? (
+                                <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Approving...</>
+                              ) : (
+                                "Approve Claim"
+                              )}
                             </Button>
                           </div>
                         )}

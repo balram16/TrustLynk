@@ -40,12 +40,12 @@ import {
 import { 
   getAllPolicies, 
   getAllClaims,
-  convertXLMToINR,
-  formatXLM,
+  convertETHToINR,
+  formatETH,
   BlockchainPolicy,
   PolicyClaim,
   getPolicyTypeString,
-  CONTRACT_ID,
+  CONTRACT_ADDRESS as CONTRACT_ID,
 } from "@/lib/blockchain"
 import { useFreighterWallet } from "@/context/freighter-wallet-context"
 import { toast } from "sonner"
@@ -116,7 +116,7 @@ export default function ProviderDashboardPage() {
       // Calculate financial metrics
       const totalClaimsPaid = claimsData
         .filter(c => c.status === CLAIM_STATUS_APPROVED)
-        .reduce((sum, c) => sum + convertXLMToINR(parseInt(c.claim_amount)), 0)
+        .reduce((sum, c) => sum + parseInt(c.claim_amount), 0)
 
       setMetrics({
         totalClaims: claimsData.length,
@@ -529,7 +529,7 @@ export default function ProviderDashboardPage() {
                               </div>
                               <div>
                                 <p className="text-xs text-muted-foreground">Amount</p>
-                                <p className="font-medium">₹{convertXLMToINR(parseInt(claim.claim_amount)).toLocaleString()}</p>
+                                <p className="font-medium">₹{parseInt(claim.claim_amount).toLocaleString()}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-muted-foreground">Status</p>
@@ -590,7 +590,7 @@ export default function ProviderDashboardPage() {
                             <div>
                               <p className="text-xs text-muted-foreground">Payment Amount</p>
                               <p className="font-bold text-green-600">
-                                ₹{convertXLMToINR(parseInt(claim.claim_amount)).toLocaleString()}
+                                ₹{parseInt(claim.claim_amount).toLocaleString()}
                               </p>
                             </div>
                             <div>
@@ -686,11 +686,11 @@ export default function ProviderDashboardPage() {
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Premium</p>
-                            <p className="font-medium">₹{convertXLMToINR(parseInt(policy.monthly_premium)).toLocaleString()}/mo</p>
+                            <p className="font-medium">₹{parseInt(policy.monthly_premium).toLocaleString()}/mo</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Coverage</p>
-                            <p className="font-medium">₹{convertXLMToINR(parseInt(policy.coverage_amount)).toLocaleString()}</p>
+                            <p className="font-medium">₹{parseInt(policy.coverage_amount).toLocaleString()}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Status</p>
@@ -793,7 +793,7 @@ export default function ProviderDashboardPage() {
                               </div>
                               <div className="text-right">
                                 <p className="font-medium">
-                                  ₹{convertXLMToINR(parseInt(claim.claim_amount)).toLocaleString()}
+                                  ₹{parseInt(claim.claim_amount).toLocaleString()}
                                 </p>
                                 <p className="text-xs text-muted-foreground">{statusInfo.text}</p>
                               </div>
@@ -1031,7 +1031,7 @@ export default function ProviderDashboardPage() {
                   <div className="p-4 border rounded-lg">
                     <h4 className="font-semibold mb-2">Blockchain Info</h4>
                     <p className="text-sm text-muted-foreground">
-                      Network: Stellar Testnet
+                      Network: Ethereum (Sepolia Testnet)
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Contract: {CONTRACT_ID.slice(0, 20)}...

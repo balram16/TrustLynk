@@ -2,12 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { 
-  isConnected as freighterIsConnected,
-  getPublicKey,
-  isAllowed,
-  setAllowed,
-} from "@stellar/freighter-api"
+import { ethers } from "ethers"
 import { getUserRole, ROLE_ADMIN, ROLE_POLICYHOLDER, ROLE_UNREGISTERED } from "@/lib/blockchain"
 
 interface WalletContextType {
@@ -42,50 +37,58 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
   const [blockchainLoading, setBlockchainLoading] = useState(false)
   const router = useRouter()
 
-  // Check if Freighter is connected on mount
+  // Check if MetaMask is connected on mount
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        const connected = await freighterIsConnected()
-        if (connected) {
-          const allowed = await isAllowed()
-          if (allowed) {
-            const publicKey = await getPublicKey()
-            setIsConnected(true)
-            setAddress(publicKey)
-          }
+        if (typeof window === "undefined" || !window.ethereum) return
+
+        const provider = new ethers.BrowserProvider(window.ethereum)
+        const accounts = await provider.listAccounts()
+
+        if (accounts.length > 0) {
+          setIsConnected(true)
+          setAddress(accounts[0].address)
         }
       } catch (error) {
-        console.error("Error checking Freighter connection:", error)
+        console.error("Error checking MetaMask connection:", error)
       }
     }
-    
+
     checkConnection()
+
+    // Listen for account changes
+    if (typeof window !== "undefined" && window.ethereum) {
+      window.ethereum.on?.("accountsChanged", (accounts: string[]) => {
+        if (accounts.length === 0) {
+          setIsConnected(false)
+          setAddress(null)
+          setUserType(null)
+        } else {
+          setAddress(accounts[0])
+        }
+      })
+    }
   }, [])
 
   const connectWallet = async () => {
     try {
       setIsLoading(true)
-      
-      // Check if Freighter is installed
-      const connected = await freighterIsConnected()
-      if (!connected) {
-        throw new Error("Freighter wallet is not installed. Please install it from https://www.freighter.app/")
+
+      if (typeof window === "undefined" || !window.ethereum) {
+        throw new Error("MetaMask wallet is not installed. Please install it from https://metamask.io/download/")
       }
 
-      // Request access
-      const allowed = await isAllowed()
-      if (!allowed) {
-        await setAllowed()
-      }
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const accounts = await provider.send("eth_requestAccounts", [])
 
-      // Get public key
-      const publicKey = await getPublicKey()
-      setIsConnected(true)
-      setAddress(publicKey)
+      if (accounts.length > 0) {
+        setIsConnected(true)
+        setAddress(accounts[0])
+      }
     } catch (error: any) {
       console.error("Failed to connect wallet:", error)
-      throw new Error(error.message || "Failed to connect to Freighter wallet")
+      throw new Error(error.message || "Failed to connect to MetaMask wallet")
     } finally {
       setIsLoading(false)
     }
@@ -120,17 +123,17 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
     setBlockchainLoading(true)
     try {
       console.log("Checking blockchain state for address:", address)
-      
+
       // Check user role directly
       const role = await getUserRole(address)
       const adminStatus = role === ROLE_ADMIN
       const policyholderStatus = role === ROLE_POLICYHOLDER
       const registeredStatus = role !== ROLE_UNREGISTERED
-      
+
       setIsAdmin(adminStatus)
       setIsPolicyholder(policyholderStatus)
       setIsRegistered(registeredStatus)
-      
+
       // Auto-update userType based on blockchain role
       if (adminStatus) {
         setUserType("admin")
@@ -149,7 +152,6 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
       })
     } catch (error) {
       console.error("Error checking blockchain state:", error)
-      // On error, reset to safe defaults
       setIsAdmin(false)
       setIsPolicyholder(false)
       setIsRegistered(false)
@@ -171,11 +173,11 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     const storedUserType = localStorage.getItem("TrustLynk-user-type")
     const storedAbhaConsent = localStorage.getItem("TrustLynk-abha-consent")
-    
+
     if (storedUserType && (storedUserType === "user" || storedUserType === "admin")) {
       setUserType(storedUserType)
     }
-    
+
     if (storedAbhaConsent === "true") {
       setHasAbhaConsent(true)
     }
@@ -193,12 +195,10 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
   // Refresh blockchain state when wallet connects/reconnects
   useEffect(() => {
     if (isConnected && address) {
-      // Small delay to ensure wallet is fully connected
       setTimeout(() => {
         refreshBlockchainState()
       }, 1000)
     } else {
-      // Reset blockchain state when disconnected
       setIsAdmin(false)
       setIsPolicyholder(false)
       setIsRegistered(false)
@@ -215,7 +215,6 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
     isLoading,
     hasAbhaConsent,
     setHasAbhaConsent,
-    // Blockchain state
     isAdmin,
     isPolicyholder,
     isRegistered,
@@ -237,5 +236,3 @@ export function useWalletContext() {
   }
   return context
 }
-
-
