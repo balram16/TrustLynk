@@ -26,6 +26,8 @@ import { useFreighterWallet } from "@/context/freighter-wallet-context"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { StateRestorationNotice } from "@/components/ui/state-restoration-notice"
 import { PolicyholderDetailsDialog, PolicyholderDetails } from "@/components/insurance/policyholder-details-dialog"
+import { AutoClaimDetailsDialog, AutoClaimDetails } from "@/components/insurance/auto-claim-details-dialog"
+import { NFTInfoDialog } from "@/components/insurance/nft-info-dialog"
 import { 
   purchasePolicy, 
   getUserPolicies as getBlockchainUserPolicies, 
@@ -42,7 +44,8 @@ import {
   claimPolicy,
   getUserClaims,
   getClaimStatusString,
-  getClaimStatusColor
+  getClaimStatusColor,
+  CONTRACT_ADDRESS
 } from "@/lib/blockchain"
 
 export const dynamic = 'force-dynamic'
@@ -73,6 +76,7 @@ interface UserPolicy {
   status: "Active" | "Expired" | "Claimed" | "Cancelled"
   premiumPaid: number
   nextPremiumDue?: string
+  tokenId?: string
   policy?: Policy
   claimsHistory?: Array<{
     id: string
@@ -92,7 +96,11 @@ export default function UserDashboard() {
   const [claiming, setClaiming] = useState<string | null>(null)
   const [userClaims, setUserClaims] = useState<any[]>([])
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
+  const [showAutoClaimDialog, setShowAutoClaimDialog] = useState(false)
+  const [selectedPolicyForClaim, setSelectedPolicyForClaim] = useState<UserPolicy | null>(null)
   const [selectedPolicyForPurchase, setSelectedPolicyForPurchase] = useState<Policy | null>(null)
+  const [showNFTDialog, setShowNFTDialog] = useState(false)
+  const [selectedNFTPolicy, setSelectedNFTPolicy] = useState<UserPolicy | null>(null)
   
   const { 
     walletAddress, 
@@ -236,6 +244,7 @@ export default function UserDashboard() {
           policyId: bp.policy_id,
           userWallet: bp.user_address,
           purchaseDate: new Date(parseInt(bp.purchase_date) * 1000).toISOString(),
+          tokenId: bp.token_id,
           status: (() => {
             // Check if policy is actually expired based on purchase date and duration
             const purchaseDate = new Date(parseInt(bp.purchase_date) * 1000);
@@ -282,6 +291,12 @@ export default function UserDashboard() {
       console.error("❌ Error fetching user policies:", error);
       setUserPolicies([]);
     }
+  }
+
+  const handleAddNFTToMetaMask = (userPolicy: UserPolicy) => {
+    console.log("Viewing NFT for policy:", userPolicy.tokenId)
+    setSelectedNFTPolicy(userPolicy)
+    setShowNFTDialog(true)
   }
 
   const handlePurchasePolicy = async (policyId: string) => {
@@ -448,6 +463,14 @@ export default function UserDashboard() {
       return
     }
 
+    const userPolicy = userPolicies.find(p => p.policyId === policyId)
+    if (userPolicy?.policy?.type === "Auto") {
+      setClaiming(policyId) // Set claiming state intentionally
+      setSelectedPolicyForClaim(userPolicy)
+      setShowAutoClaimDialog(true)
+      return
+    }
+
     setClaiming(policyId)
 
     try {
@@ -560,6 +583,115 @@ export default function UserDashboard() {
         variant: "destructive"
       })
     } finally {
+      if (!showAutoClaimDialog) {
+        setClaiming(null)
+      }
+    }
+  }
+
+  const processAutoClaim = async (details: AutoClaimDetails) => {
+    if (!selectedPolicyForClaim || !selectedPolicyForClaim.policy) return;
+    
+    const policyId = selectedPolicyForClaim.policyId;
+    const claimAmountINR = details.estimateAmount; // using specific garage estimate
+    // Convert garage details into 'hospital_details' for the unified API endpoint processing
+    const diagnosis = `Auto Damage: ${details.incidentDescription}`;
+    
+    try {
+      const fraudResult = await fraudDetectionAPI.analyzeFraudRisk({
+        claim: {
+          claim_id: `cl_${Date.now()}`,
+          abha_id: "none",
+          policy_id: policyId,
+          claim_amount: claimAmountINR,
+          claim_date: new Date().toISOString(),
+          hospital_details: {
+            name: details.garageName,
+            address: details.garageAddress,
+            registration_number: "GARAGE123",
+            doctor_name: "Mechanic",
+            doctor_registration: "MEC123"
+          },
+          diagnosis: diagnosis,
+          treatment: `Vehicle Repair at ${details.garageName}`,
+          medications: [],
+          claim_type: "cashless",
+          documents: []
+        },
+        abha_user: {
+          abhaId: "none",
+          fullName: "Policy Holder",
+          dob: "1990-01-01",
+          gender: "M",
+          bloodGroup: "O+",
+          address: { state: "State", district: "District", pincode: "000000", address: "Address" },
+          phone: "0000000000",
+          email: "test@example.com",
+          allergies: [],
+          medicalHistory: [],
+          existingInsurance: [],
+          emergencyContact: { name: "Contact", relation: "Family", phone: "0000000000" },
+          hasConsent: true
+        },
+        policy: {
+          coverage_amount: selectedPolicyForClaim.policy.coverage.amount.toString(),
+          created_at: new Date().toISOString(),
+          created_by: "TrustLynk",
+          description: selectedPolicyForClaim.policy.description,
+          duration_days: "365",
+          max_age: "65",
+          min_age: "18",
+          monthly_premium: selectedPolicyForClaim.policy.premium.monthly.toString(),
+          policy_id: policyId,
+          policy_type: 3, // Auto 
+          title: selectedPolicyForClaim.policy.title,
+          waiting_period_days: "30",
+          yearly_premium: selectedPolicyForClaim.policy.premium.yearly.toString()
+        }
+      })
+      
+      const aggregateScore = Math.min(100, Math.max(0, Math.round(fraudResult.aggregate_score)))
+      console.log("🎯 Auto Fraud Detection Score:", aggregateScore, "Risk:", fraudResult.risk_level)
+
+      console.log("📝 Submitting auto claim to blockchain...")
+      const txHash = await claimPolicy(
+        policyId,
+        aggregateScore
+      )
+      console.log("✅ Auto Claim submitted on blockchain:", txHash)
+
+      let status: "APPROVED" | "PENDING" | "REJECTED"
+      if (aggregateScore <= 30) {
+        status = "APPROVED"
+      } else if (aggregateScore <= 70) {
+        status = "PENDING"
+      } else {
+        status = "REJECTED"
+      }
+
+      const statusMessage = status === 'APPROVED'
+        ? `🎯 Claim APPROVED! Funds transferred automatically by smart contract`
+        : status === 'REJECTED'
+        ? '❌ Claim REJECTED - High fraud risk detected'
+        : '⏳ Claim PENDING - Awaiting admin review'
+
+      toast({
+        title: `Auto Claim ${status}`,
+        description: `Fraud Score: ${aggregateScore}/100 | ${statusMessage}`,
+      })
+
+      fetchUserClaims()
+      fetchUserPolicies()
+      setShowAutoClaimDialog(false)
+      setSelectedPolicyForClaim(null)
+    } catch (error) {
+       console.error("❌ Auto Claim error:", error)
+       toast({
+         title: "Auto Claim Failed",
+         description: error instanceof Error ? error.message : "Failed to process auto claim",
+         variant: "destructive"
+       })
+    } finally {
       setClaiming(null)
     }
   }
@@ -603,7 +735,32 @@ export default function UserDashboard() {
         }}
         onSubmit={handlePurchaseWithDetails}
         policyTitle={selectedPolicyForPurchase?.title || ""}
-        premium={Math.floor((selectedPolicyForPurchase?.premium.yearly || 0) / 12)}
+        premium={selectedPolicyForPurchase ? (selectedPolicyForPurchase.type === 'Auto' ? selectedPolicyForPurchase.premium.yearly : Math.floor(selectedPolicyForPurchase.premium.yearly / 12)) : 0}
+        isAutoPolicy={selectedPolicyForPurchase?.type === 'Auto'}
+        isHealthPolicy={selectedPolicyForPurchase?.type === 'Health'}
+      />
+
+      <NFTInfoDialog
+        open={showNFTDialog}
+        onClose={() => { setShowNFTDialog(false); setSelectedNFTPolicy(null) }}
+        contractAddress={CONTRACT_ADDRESS}
+        tokenId={selectedNFTPolicy?.tokenId || '1'}
+        policyTitle={selectedNFTPolicy?.policy?.title || 'Insurance Policy'}
+        policyType={selectedNFTPolicy?.policy?.type || 'Policy'}
+        purchaseDate={selectedNFTPolicy?.purchaseDate}
+        coverageAmount={selectedNFTPolicy?.policy?.coverage ? `${selectedNFTPolicy.policy.coverage.currency}${selectedNFTPolicy.policy.coverage.amount.toLocaleString()}` : undefined}
+        premiumPaid={selectedNFTPolicy?.premiumPaid ? `₹${selectedNFTPolicy.premiumPaid.toLocaleString()}` : undefined}
+        walletAddress={selectedNFTPolicy?.userWallet}
+      />
+      <AutoClaimDetailsDialog
+        open={showAutoClaimDialog}
+        onClose={() => {
+          setShowAutoClaimDialog(false)
+          setSelectedPolicyForClaim(null)
+          setClaiming(null)
+        }}
+        onSubmit={processAutoClaim}
+        policyTitle={selectedPolicyForClaim?.policy?.title || "Auto Policy"}
       />
       
       <div className="container mx-auto p-6">
@@ -769,10 +926,14 @@ export default function UserDashboard() {
                       <div className="text-right">
                         <p className="text-sm text-gray-600 dark:text-gray-400">Premium</p>
                         <p className="text-lg font-semibold">
-                          ₹{policy.premium.yearly.toLocaleString()}/year
+                          {policy.type === 'Auto' 
+                            ? `₹${policy.premium.yearly.toLocaleString()} (One-time)`
+                            : `₹${policy.premium.yearly.toLocaleString()}/year`}
                         </p>
                         <p className="text-xs text-blue-600 mt-1">
-                          {formatETH(convertINRToETH(Math.floor(policy.premium.yearly / 12)))} ETH/month
+                          {policy.type === 'Auto'
+                            ? `${formatETH(convertINRToETH(policy.premium.yearly))} ETH`
+                            : `${formatETH(convertINRToETH(Math.floor(policy.premium.yearly / 12)))} ETH/month`}
                         </p>
                       </div>
                     </div>
@@ -806,12 +967,12 @@ export default function UserDashboard() {
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           Minting NFT & Processing Payment...
                         </>
-                      ) : (
-                        <>
-                          <ShoppingCart className="h-4 w-4 mr-2" />
-                          Pay ₹{Math.floor(policy.premium.yearly / 12).toLocaleString()} & Get NFT
-                        </>
-                      )}
+                        ) : (
+                          <>
+                            <ShoppingCart className="h-4 w-4 mr-2" />
+                            Pay ₹{policy.type === 'Auto' ? policy.premium.yearly.toLocaleString() : Math.floor(policy.premium.yearly / 12).toLocaleString()} & Get NFT
+                          </>
+                        )}
                     </Button>
                   </CardContent>
                 </Card>
@@ -919,10 +1080,16 @@ export default function UserDashboard() {
                         </div>
                       )}
                       
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="flex-1">
-                          <FileText className="h-4 w-4 mr-2" />
-                          View Details
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 min-w-[120px]"
+                          onClick={() => handleAddNFTToMetaMask(userPolicy)}
+                          title={`Token ID: ${userPolicy.tokenId || userPolicy.policyId}`}
+                        >
+                          <span className="mr-1">🦊</span>
+                          View NFT
                         </Button>
                                                                          <Button 
                           variant="outline" 

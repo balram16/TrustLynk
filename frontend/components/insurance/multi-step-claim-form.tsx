@@ -42,6 +42,9 @@ import {
   type OracleResponse,
   type OracleProgress 
 } from "@/lib/oracle-service"
+import { useRouter } from "next/navigation"
+import { claimPolicyWithOracle, getUserPolicies } from "@/lib/blockchain"
+import { useFreighterWallet } from "@/context/freighter-wallet-context"
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -66,6 +69,8 @@ interface ClaimFormData {
 }
 
 export function MultiStepClaimForm() {
+  const router = useRouter();
+  const { walletAddress } = useFreighterWallet();
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [formData, setFormData] = useState<ClaimFormData>({
     abhaId: '',
@@ -84,6 +89,7 @@ export function MultiStepClaimForm() {
   const [fetchingAbha, setFetchingAbha] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [analyzingClaim, setAnalyzingClaim] = useState(false);
+  const [submittingClaim, setSubmittingClaim] = useState(false);
   
   // Progress tracking
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -199,6 +205,48 @@ export function MultiStepClaimForm() {
       setError(err instanceof Error ? err.message : 'Oracle analysis failed');
     } finally {
       setAnalyzingClaim(false);
+    }
+  };
+
+  // Step 5: Submit Claim to Blockchain
+  const handleSubmitToChain = async () => {
+    if (!formData.oracleResponse) return;
+    
+    if (!walletAddress) {
+      setError("Please connect your wallet first.");
+      return;
+    }
+    
+    setError('');
+    setSubmittingClaim(true);
+
+    try {
+      const policies = await getUserPolicies(walletAddress);
+      const activePolicy = policies.find(p => p.active === true);
+      
+      if (!activePolicy) {
+        throw new Error("No active policy found to claim against.");
+      }
+
+      const policyId = parseInt(activePolicy.policy_id);
+
+      const result = await claimPolicyWithOracle(
+        policyId,
+        formData.oracleResponse.score,
+        formData.abhaId,
+        formData.ipfsCid,
+        String(formData.oracleResponse.requestId),
+        formData.claimDetails,
+        formData.hospitalName
+      );
+
+      if (result.success) {
+        router.push("/dashboard/user?claimSuccess=true");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Submit failed');
+    } finally {
+      setSubmittingClaim(false);
     }
   };
 
@@ -648,8 +696,15 @@ export function MultiStepClaimForm() {
             </div>
 
             {/* Submit to Blockchain Button */}
-            <Button className="w-full" size="lg">
-              Submit to Blockchain
+            <Button className="w-full" size="lg" onClick={handleSubmitToChain} disabled={submittingClaim}>
+              {submittingClaim ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting to Company...
+                </>
+              ) : (
+                "Submit to Company verification"
+              )}
             </Button>
           </div>
         )}

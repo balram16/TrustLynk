@@ -63,7 +63,7 @@ contract InsurancePortal {
         uint256 premiumPaidWei;
         uint256 monthlyPremiumWei;
         bool active;
-        string tokenId;
+        uint256 tokenId;
         string metadataUri;
         uint256 escrowId;
         string holderName;
@@ -174,9 +174,15 @@ contract InsurancePortal {
     mapping(uint256 => Policy) private _policies;
     mapping(address => UserPolicy[]) private _userPolicies;
 
-    mapping(string => PolicyNFTMetadata) private _nftMetadata;
-    mapping(uint256 => string[]) private _policyTokens;
-    mapping(address => string[]) private _userTokens;
+    mapping(uint256 => UserPolicy[]) private _allUserPolicies; // Reference for numeric lookups
+
+    mapping(uint256 => PolicyNFTMetadata) private _nftMetadata;
+    mapping(uint256 => uint256[]) private _policyTokens;
+    mapping(address => uint256[]) private _userTokens;
+
+    // ERC721 Mappings
+    mapping(uint256 => address) private _tokenOwners;
+    mapping(address => uint256) private _balances;
 
     mapping(uint256 => PaymentEscrow) private _escrows;
     mapping(address => uint256[]) private _userEscrows;
@@ -369,13 +375,13 @@ contract InsurancePortal {
 
         // Generate token
         tokenCounter++;
-        string memory tId = string(abi.encodePacked("POLICY_", _uint2str(tokenCounter)));
+        uint256 tId = tokenCounter;
 
         uint256 expiryTime = block.timestamp + (policy.durationDays * 1 days);
 
         // Store NFT metadata
         _nftMetadata[tId] = PolicyNFTMetadata({
-            name: "Policy NFT",
+            name: "TrustLynk Insurance Policy",
             description: policy.description,
             imageUri: params.metadataUri,
             coverageAmount: policy.coverageAmount,
@@ -390,7 +396,7 @@ contract InsurancePortal {
         });
 
         // Create user policy
-        _userPolicies[msg.sender].push(UserPolicy({
+        UserPolicy memory up = UserPolicy({
             policyId: params.policyId,
             userAddress: msg.sender,
             purchaseDate: block.timestamp,
@@ -405,12 +411,18 @@ contract InsurancePortal {
             holderAge: params.holderAge,
             holderGender: params.holderGender,
             holderBloodGroup: params.holderBloodGroup
-        }));
+        });
+
+        _userPolicies[msg.sender].push(up);
+        
+        // ERC721 Minting logic
+        _tokenOwners[tId] = msg.sender;
+        _balances[msg.sender]++;
 
         _policyTokens[params.policyId].push(tId);
         _userTokens[msg.sender].push(tId);
 
-        emit PolicyPurchased(params.policyId, msg.sender, msg.value, tId, escrowCounter);
+        emit PolicyPurchased(params.policyId, msg.sender, msg.value, _uint2str(tId), escrowCounter);
     }
 
     function getMyPolicies(address _userAddress) external view returns (UserPolicy[] memory) {
@@ -572,11 +584,11 @@ contract InsurancePortal {
         return result;
     }
 
-    function getUserTokensList(address _userAddress) external view returns (string[] memory) {
+    function getUserTokensList(address _userAddress) external view returns (uint256[] memory) {
         return _userTokens[_userAddress];
     }
 
-    function getPolicyTokensList(uint256 _policyId) external view returns (string[] memory) {
+    function getPolicyTokensList(uint256 _policyId) external view returns (uint256[] memory) {
         return _policyTokens[_policyId];
     }
 
@@ -588,8 +600,52 @@ contract InsurancePortal {
         return treasury;
     }
 
-    function getNFTMetadata(string calldata _tokenId) external view returns (PolicyNFTMetadata memory) {
+    function getNFTMetadata(uint256 _tokenId) external view returns (PolicyNFTMetadata memory) {
+        require(_tokenOwners[_tokenId] != address(0), "Token does not exist");
         return _nftMetadata[_tokenId];
+    }
+
+    // ==========================================
+    // ERC721 Interface Functions
+    // ==========================================
+
+    function name() external pure returns (string memory) {
+        return "TrustLynk Insurance Policy";
+    }
+
+    function symbol() external pure returns (string memory) {
+        return "TLINS";
+    }
+
+    function balanceOf(address _owner) external view returns (uint256) {
+        require(_owner != address(0), "Zero address");
+        return _balances[_owner];
+    }
+
+    function ownerOf(uint256 _tokenId) external view returns (address) {
+        address owner = _tokenOwners[_tokenId];
+        require(owner != address(0), "Token does not exist");
+        return owner;
+    }
+
+    function tokenURI(uint256 _tokenId) external view returns (string memory) {
+        require(_tokenOwners[_tokenId] != address(0), "Token does not exist");
+        
+        // Find metadataUri from user policies
+        address owner = _tokenOwners[_tokenId];
+        UserPolicy[] storage policies = _userPolicies[owner];
+        for(uint i = 0; i < policies.length; i++) {
+            if (policies[i].tokenId == _tokenId) {
+                return policies[i].metadataUri;
+            }
+        }
+        return "";
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == 0x80ac58cd // IERC721
+            || interfaceId == 0x5b5e139f // IERC721Metadata
+            || interfaceId == 0x01ffc9a7; // ERC165
     }
 
     function getOracleRequest(string calldata _requestId) external view returns (OracleRequestData memory) {

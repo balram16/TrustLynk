@@ -65,7 +65,8 @@ export default function CreatePolicyPage() {
     const policyTypeMap: Record<string, number> = {
       health: POLICY_TYPE_HEALTH,
       life: POLICY_TYPE_LIFE,
-      auto: POLICY_TYPE_AUTO,
+      two_wheeler: POLICY_TYPE_AUTO,
+      four_wheeler: POLICY_TYPE_AUTO,
       home: POLICY_TYPE_HOME,
       travel: POLICY_TYPE_TRAVEL,
     }
@@ -76,11 +77,12 @@ export default function CreatePolicyPage() {
       return
     }
 
+    const isAuto = form.policyType === "two_wheeler" || form.policyType === "four_wheeler"
     const monthly = parseInt(form.monthlyPremium)
-    const yearly = parseInt(form.yearlyPremium)
+    const yearly = isAuto ? monthly : parseInt(form.yearlyPremium)
     const coverage = parseInt(form.coverageAmount)
-    const minAge = parseInt(form.minAge)
-    const maxAge = parseInt(form.maxAge)
+    const minAge = isAuto ? 0 : parseInt(form.minAge)
+    const maxAge = isAuto ? 100 : parseInt(form.maxAge)
     const duration = parseInt(form.durationDays)
     const waiting = parseInt(form.waitingPeriodDays)
 
@@ -107,8 +109,12 @@ export default function CreatePolicyPage() {
         coverageAmount: coverage,
       })
 
+      const finalTitle = isAuto 
+        ? `${form.title.trim()} [${form.policyType === 'two_wheeler' ? 'Two Wheeler' : 'Four Wheeler'}]` 
+        : form.title.trim()
+
       const result = await createPolicy({
-        title: form.title.trim(),
+        title: finalTitle,
         description: form.description.trim(),
         policyType: policyTypeNum,
         monthlyPremium: monthly,
@@ -163,7 +169,7 @@ export default function CreatePolicyPage() {
             setForm({
               title: "", description: "", policyType: "",
               monthlyPremium: "", yearlyPremium: "", coverageAmount: "",
-              minAge: "18", maxAge: "65", durationDays: "365", waitingPeriodDays: "30",
+              minAge: "18", maxAge: "65", durationDays: "365", waitingPeriodDays: "30"
             })
           }}>
             Create Another
@@ -236,7 +242,8 @@ export default function CreatePolicyPage() {
                 <SelectContent>
                   <SelectItem value="health">🏥 Health Insurance</SelectItem>
                   <SelectItem value="life">❤️ Life Insurance</SelectItem>
-                  <SelectItem value="auto">🚗 Auto Insurance</SelectItem>
+                  <SelectItem value="two_wheeler">🛵 Two Wheeler Insurance</SelectItem>
+                  <SelectItem value="four_wheeler">🚗 Four Wheeler Insurance</SelectItem>
                   <SelectItem value="home">🏠 Home Insurance</SelectItem>
                   <SelectItem value="travel">✈️ Travel Insurance</SelectItem>
                 </SelectContent>
@@ -254,7 +261,9 @@ export default function CreatePolicyPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="monthlyPremium">Monthly Premium (₹) *</Label>
+                <Label htmlFor="monthlyPremium">
+                  {(form.policyType === 'two_wheeler' || form.policyType === 'four_wheeler') ? 'One-Time Premium (₹) *' : 'Monthly Premium (₹) *'}
+                </Label>
                 <Input
                   id="monthlyPremium"
                   type="number"
@@ -266,18 +275,20 @@ export default function CreatePolicyPage() {
                   disabled={submitting}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="yearlyPremium">Yearly Premium (₹)</Label>
-                <Input
-                  id="yearlyPremium"
-                  type="number"
-                  placeholder="Auto-filled from monthly"
-                  value={form.yearlyPremium}
-                  onChange={(e) => handleChange("yearlyPremium", e.target.value)}
-                  disabled={submitting}
-                />
-                <p className="text-xs text-muted-foreground">Auto-calculated as monthly × 12</p>
-              </div>
+              {form.policyType !== 'two_wheeler' && form.policyType !== 'four_wheeler' && (
+                <div className="space-y-2">
+                  <Label htmlFor="yearlyPremium">Yearly Premium (₹)</Label>
+                  <Input
+                    id="yearlyPremium"
+                    type="number"
+                    placeholder="Auto-filled from monthly"
+                    value={form.yearlyPremium}
+                    onChange={(e) => handleChange("yearlyPremium", e.target.value)}
+                    disabled={submitting}
+                  />
+                  <p className="text-xs text-muted-foreground">Auto-calculated as monthly × 12</p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -300,35 +311,37 @@ export default function CreatePolicyPage() {
         {/* Eligibility */}
         <Card>
           <CardHeader>
-            <CardTitle>Eligibility & Duration</CardTitle>
+            <CardTitle>{(form.policyType === 'two_wheeler' || form.policyType === 'four_wheeler') ? 'Duration' : 'Eligibility & Duration'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="minAge">Minimum Age</Label>
-                <Input
-                  id="minAge"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={form.minAge}
-                  onChange={(e) => handleChange("minAge", e.target.value)}
-                  disabled={submitting}
-                />
+            {form.policyType !== 'two_wheeler' && form.policyType !== 'four_wheeler' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="minAge">Minimum Age</Label>
+                  <Input
+                    id="minAge"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={form.minAge}
+                    onChange={(e) => handleChange("minAge", e.target.value)}
+                    disabled={submitting}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxAge">Maximum Age</Label>
+                  <Input
+                    id="maxAge"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={form.maxAge}
+                    onChange={(e) => handleChange("maxAge", e.target.value)}
+                    disabled={submitting}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="maxAge">Maximum Age</Label>
-                <Input
-                  id="maxAge"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={form.maxAge}
-                  onChange={(e) => handleChange("maxAge", e.target.value)}
-                  disabled={submitting}
-                />
-              </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -366,7 +379,7 @@ export default function CreatePolicyPage() {
               <p className="text-sm font-medium mb-2 text-[#fa6724]">Preview</p>
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground">Monthly Premium</p>
+                  <p className="text-muted-foreground">{(form.policyType === 'two_wheeler' || form.policyType === 'four_wheeler') ? 'One-Time Premium' : 'Monthly Premium'}</p>
                   <p className="font-bold">₹{parseInt(form.monthlyPremium || "0").toLocaleString()}</p>
                 </div>
                 <div>

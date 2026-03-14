@@ -22,7 +22,7 @@ const CONTRACT_ABI = [
 
   // User Policies (uses PurchaseParams struct)
   "function purchasePolicy(tuple(uint256 policyId, string metadataUri, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup) params) external payable",
-  "function getMyPolicies(address _userAddress) external view returns (tuple(uint256 policyId, address userAddress, uint256 purchaseDate, uint256 expiryDate, uint256 premiumPaidWei, uint256 monthlyPremiumWei, bool active, string tokenId, string metadataUri, uint256 escrowId, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup)[])",
+  "function getMyPolicies(address _userAddress) external view returns (tuple(uint256 policyId, address userAddress, uint256 purchaseDate, uint256 expiryDate, uint256 premiumPaidWei, uint256 monthlyPremiumWei, bool active, uint256 tokenId, string metadataUri, uint256 escrowId, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup)[])",
 
   // Claims (uses ClaimParams struct)
   "function claimPolicy(tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName) params) external",
@@ -33,16 +33,19 @@ const CONTRACT_ABI = [
   "function getAllClaims() external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
   "function getUserClaims(address _userAddress) external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
 
-  // NFT / Tokens
-  "function getNFTMetadata(string _tokenId) external view returns (tuple(string name, string description, string imageUri, uint256 coverageAmount, uint256 validityStart, uint256 validityEnd, uint256 premiumAmount, uint32 policyType, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup))",
-  "function getUserTokensList(address _userAddress) external view returns (string[])",
-  "function getPolicyTokensList(uint256 _policyId) external view returns (string[])",
+  // NFT / Tokens / ERC721
+  "function name() external pure returns (string)",
+  "function symbol() external pure returns (string)",
+  "function balanceOf(address _owner) external view returns (uint256)",
+  "function ownerOf(uint256 _tokenId) external view returns (address)",
+  "function tokenURI(uint256 _tokenId) external view returns (string)",
+  "function supportsInterface(bytes4 interfaceId) external pure returns (bool)",
+  "function getNFTMetadata(uint256 _tokenId) external view returns (tuple(string name, string description, string imageUri, uint256 coverageAmount, uint256 validityStart, uint256 validityEnd, uint256 premiumAmount, uint32 policyType, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup))",
+  "function getUserTokensList(address _userAddress) external view returns (uint256[])",
+  "function getPolicyTokensList(uint256 _policyId) external view returns (uint256[])",
   "function getTotalTokens() external view returns (uint256)",
 
-  // Treasury / Oracle
-  "function getTreasury() external view returns (uint256)",
-  "function storeOracleRequest(string _requestId, uint256 _claimId, string _abhaId, string _ipfsCid) external",
-  "function updateOracleRequestStatus(string _requestId, uint32 _status) external",
+
   "function getOracleRequest(string _requestId) external view returns (tuple(string requestId, uint256 claimId, string abhaId, string ipfsCid, uint256 requestedAt, uint32 status))",
   "function verifyIpfsCidInClaim(string _ipfsCid) external view returns (bool)",
   "function getClaimsByAbhaId(string _abhaId) external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
@@ -74,7 +77,7 @@ export const SUPPORTED_CHAINS: Record<number, { name: string; rpcUrl: string; bl
   },
   31337: {
     name: "Hardhat Local",
-    rpcUrl: "http://127.0.0.1:8545",
+    rpcUrl: "http://localhost:8545",
     blockExplorer: "",
   },
 };
@@ -126,15 +129,22 @@ export interface BlockchainPolicy {
 }
 
 export interface BlockchainUserPolicy {
-  id: string;
+  id: string; // Unique identifier (escrow_id)
   policy_id: string;
   user_address: string;
   purchase_date: string;
   expiry_date: string;
   premium_paid: string;
-  status: number;
+  monthly_premium: string;
+  active: boolean;
+  status: number; // For UI backward compatibility
   token_id: string;
   metadata_uri: string;
+  escrow_id: string;
+  holder_name: string;
+  holder_age: number;
+  holder_gender: string;
+  holder_blood_group: string;
 }
 
 export interface PolicyClaim {
@@ -151,16 +161,16 @@ export interface PolicyClaim {
 export interface PolicyNFTMetadata {
   name: string;
   description: string;
-  image_uri: string;
-  coverage_amount: string;
-  validity_start: string;
-  validity_end: string;
-  premium_amount: string;
-  policy_type: number;
-  holder_name: string;
-  holder_age: string;
-  holder_gender: string;
-  holder_blood_group: string;
+  imageUri: string;
+  coverageAmount: number;
+  validityStart: number;
+  validityEnd: number;
+  premiumAmount: number;
+  policyType: number;
+  holderName: string;
+  holderAge: number;
+  holderGender: string;
+  holderBloodGroup: string;
 }
 
 // ==========================================
@@ -448,10 +458,10 @@ export async function purchasePolicy(
     // Pass as struct
     const tx = await contract.purchasePolicy(
       {
-        policyId: numericPolicyId,
+        policyId: BigInt(numericPolicyId),
         metadataUri: metadataUri,
         holderName: policyholderDetails.name,
-        holderAge: policyholderDetails.age,
+        holderAge: BigInt(policyholderDetails.age),
         holderGender: policyholderDetails.gender,
         holderBloodGroup: policyholderDetails.bloodGroup,
       },
@@ -479,17 +489,23 @@ export async function getUserPolicies(walletAddress: string): Promise<Blockchain
     const policies = await contract.getMyPolicies(walletAddress);
 
     return policies.map((p: any) => ({
-      id: p.policyId.toString(),
+      id: p.escrowId.toString(),
       policy_id: p.policyId.toString(),
       user_address: p.userAddress,
       purchase_date: p.purchaseDate.toString(),
       expiry_date: p.expiryDate.toString(),
-      // Convert Wei → INR so display pages can safely parseInt() as INR
       premium_paid: convertETHToINR(p.premiumPaidWei).toString(),
+      monthly_premium: convertETHToINR(p.monthlyPremiumWei).toString(),
+      active: p.active,
       status: p.active ? USER_POLICY_STATUS_ACTIVE : USER_POLICY_STATUS_EXPIRED,
-      token_id: p.tokenId,
+      token_id: p.tokenId.toString(),
       metadata_uri: p.metadataUri,
-    }));
+      escrow_id: p.escrowId.toString(),
+      holder_name: p.holderName,
+      holder_age: Number(p.holderAge),
+      holder_gender: p.holderGender,
+      holder_blood_group: p.holderBloodGroup
+    } as BlockchainUserPolicy));
   } catch (error: any) {
     if (error.reason && error.reason.includes("User not registered")) {
       console.log("User not registered yet. Returning no policies.");
@@ -580,6 +596,34 @@ export async function claimPolicyWithOracle(
   } catch (error: any) {
     console.error("Error claiming with oracle:", error);
     throw error;
+  }
+}
+
+export const getNFTMetadata = async (tokenId: string | number): Promise<PolicyNFTMetadata | null> => {
+  try {
+    const contract = getReadContract();
+    
+    // Extract numeric portion only: "POLICY_1" → "1"
+    const numericId = typeof tokenId === 'string' ? BigInt(tokenId.replace(/\D/g, '')) : BigInt(tokenId);
+    const m = await contract.getNFTMetadata(numericId);
+    
+    return {
+      name: m.name,
+      description: m.description,
+      imageUri: m.imageUri,
+      coverageAmount: Number(m.coverageAmount),
+      validityStart: Number(m.validityStart),
+      validityEnd: Number(m.validityEnd),
+      premiumAmount: Number(m.premiumAmount),
+      policyType: Number(m.policyType),
+      holderName: m.holderName,
+      holderAge: Number(m.holderAge),
+      holderGender: m.holderGender,
+      holderBloodGroup: m.holderBloodGroup
+    };
+  } catch (error) {
+    console.error("Error getting NFT metadata:", error);
+    return null;
   }
 }
 
@@ -686,45 +730,26 @@ export async function isContractInitialized(): Promise<boolean> {
 // NFT / Token Functions
 // ==========================================
 
-export async function getNFTMetadata(tokenId: string): Promise<PolicyNFTMetadata | null> {
-  try {
-    const contract = getReadContract();
-    const metadata = await contract.getNFTMetadata(tokenId);
 
-    return {
-      name: metadata.name,
-      description: metadata.description,
-      image_uri: metadata.imageUri,
-      coverage_amount: metadata.coverageAmount.toString(),
-      validity_start: metadata.validityStart.toString(),
-      validity_end: metadata.validityEnd.toString(),
-      premium_amount: metadata.premiumAmount.toString(),
-      policy_type: Number(metadata.policyType),
-      holder_name: metadata.holderName || "",
-      holder_age: metadata.holderAge?.toString() || "0",
-      holder_gender: metadata.holderGender || "",
-      holder_blood_group: metadata.holderBloodGroup || "",
-    };
-  } catch (error) {
-    console.error("Error getting NFT metadata:", error);
-    return null;
-  }
-}
+
 
 export async function getUserTokens(walletAddress: string): Promise<string[]> {
   try {
     const contract = getReadContract();
-    return await contract.getUserTokensList(walletAddress);
+    const tokens = await contract.getUserTokensList(walletAddress);
+    return tokens.map((t: any) => t.toString());
   } catch (error) {
     console.error("Error getting user tokens:", error);
     return [];
   }
 }
 
+
 export async function getPolicyTokens(policyId: number): Promise<string[]> {
   try {
     const contract = getReadContract();
-    return await contract.getPolicyTokensList(policyId);
+    const tokens = await contract.getPolicyTokensList(policyId);
+    return tokens.map((t: any) => t.toString());
   } catch (error) {
     console.error("Error getting policy tokens:", error);
     return [];
@@ -817,12 +842,23 @@ export function generatePolicyMetadata(
   ];
 
   if (policyholderDetails) {
-    attributes.push(
-      { trait_type: "Holder Name", value: policyholderDetails.name },
-      { trait_type: "Holder Age", value: policyholderDetails.age.toString() },
-      { trait_type: "Holder Gender", value: policyholderDetails.gender },
-      { trait_type: "Holder Blood Group", value: policyholderDetails.bloodGroup }
-    );
+    if (policy.policy_type === 3) {
+      // Auto Insurance Maps to Vehicle Details
+      attributes.push(
+        { trait_type: "Registration Number", value: policyholderDetails.name },
+        { trait_type: "Manufacturing Year", value: policyholderDetails.age.toString() },
+        { trait_type: "Vehicle Make", value: policyholderDetails.gender },
+        { trait_type: "Vehicle Model", value: policyholderDetails.bloodGroup }
+      );
+    } else {
+      // Standard Health/Life Insurance Maps to Personal Details
+      attributes.push(
+        { trait_type: "Holder Name", value: policyholderDetails.name },
+        { trait_type: "Holder Age", value: policyholderDetails.age.toString() },
+        { trait_type: "Holder Gender", value: policyholderDetails.gender },
+        { trait_type: "Holder Blood Group", value: policyholderDetails.bloodGroup }
+      );
+    }
   }
 
   return {
