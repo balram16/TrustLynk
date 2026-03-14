@@ -1,73 +1,38 @@
 import os
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-
-try:
-    from groq import Groq
-except Exception:
-    Groq = None
-
-
-app = FastAPI(title="Decentralized Claim Verifier API")
-
-
-class ClaimRequest(BaseModel):
-    ipfs_hash: str
-    abha_identifier: str
-
-
-"""
-Groq client initialization
-
-SECURITY NOTE:
-- Do NOT hardcode API keys in source control. GitHub will block pushes if secrets are detected.
-- Set GROQ_API_KEY in environment (e.g., .env, secret store) and load from os.environ.
-"""
-client = None
-if Groq is not None:
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if groq_api_key:
-        try:
-            client = Groq(api_key=groq_api_key)
-        except Exception as e:
-            print(f"Warning: Groq client not initialized. {e}")
-            client = None
-    else:
-        print("Warning: GROQ_API_KEY not set; AI analysis disabled.")
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.post("/analyze")
-def analyze(req: ClaimRequest):
-    if client is None:
-        raise HTTPException(status_code=503, detail="AI analysis not configured; set GROQ_API_KEY")
-    # Placeholder: In your full implementation, fetch IPFS PDF, extract signals, and call Groq
-    return {
-        "abha_id": req.abha_identifier,
-        "ipfs": req.ipfs_hash,
-        "score": 42,
-        "validations": ["✓ ABHA ID format valid"],
-        "redFlags": [],
-        "suggestions": ["Manual review recommended"],
-    }
-
-import fitz  # PyMuPDF
 import json
-import os
-import re  # Regex
-import hashlib # For duplicate file check
-import requests # <--- ADDED for IPFS fetch
+import re
+import hashlib
+import requests
+import fitz  # PyMuPDF
+import uvicorn
 from datetime import datetime, timedelta
 from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Tuple, Any
-from groq import Groq
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
+
+# --- FastAPI App ---
+app = FastAPI(title="Decentralized Claim Verifier API")
+
+# Enable CORS for frontend interaction
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- Pydantic Models ---
 class Diagnosis(BaseModel):
@@ -87,24 +52,34 @@ class ClaimRequest(BaseModel):
     ipfs_hash: str = Field(..., description="IPFS hash (CID) of the claim PDF.")
     abha_identifier: str = Field(..., description="Patient's Aadhaar/ABHA identifier.")
 
-# --- FastAPI App ---
-app = FastAPI(title="Decentralized Claim Verifier API")
-
 
 """
-Groq client initialization
+Gemini API client initialization
 
 SECURITY NOTE:
 - Do NOT hardcode API keys in source control. GitHub will block pushes if secrets are detected.
-- Set GROQ_API_KEY in environment (e.g., .env, deployment secret store) and load from os.environ.
+- Set GEMINI_API_KEY in environment (e.g., .env, deployment secret store) and load from os.environ.
 """
 try:
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if not groq_api_key:
-        raise RuntimeError("GROQ_API_KEY is not set. Configure it in environment variables.")
-    client = Groq(api_key=groq_api_key)
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY is not set. Configure it in environment variables.")
+    
+    # Initialize new genai client
+    client = genai.Client(api_key=gemini_api_key)
+    
+    print("⏳ Testing Gemini API connection...")
+    test_response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents="Respond with a single word: 'Hello'"
+    )
+    if test_response and test_response.text:
+        print(f"✅ Gemini API is WORKING! Test response: '{test_response.text.strip()}'")
+    else:
+        print("⚠️ Gemini API connected but returned an empty response.")
+        
 except Exception as e:
-    print(f"Warning: Groq client not initialized. {e}")
+    print(f"❌ Gemini client NOT working / initialized. Error: {e}")
     client = None
 
 # --- KNOWLEDGE BASES ---
@@ -140,26 +115,21 @@ MOCK_DUPLICATE_HASH_DB = {
     "example_hash_12345": "Claim-001",
 }
 
-# --- NEW Helper Function: Fetch PDF from IPFS ---
+# --- Helper Function: Fetch PDF from IPFS ---
 def fetch_pdf_from_ipfs(ipfs_hash: str) -> bytes:
     """Fetches PDF content from a public IPFS gateway."""
-    # Using ipfs.io, but you can switch to Pinata, Infura, etc. if needed
     gateway_url = f"https://ipfs.io/ipfs/{ipfs_hash}"
-    print(f"Attempting to fetch PDF from: {gateway_url}") # Log the URL
+    print(f"Attempting to fetch PDF from: {gateway_url}")
     try:
-        response = requests.get(gateway_url, timeout=60) # Increased timeout to 60 seconds
-        response.raise_for_status() # Raise HTTP errors
+        response = requests.get(gateway_url, timeout=60)
+        response.raise_for_status()
         content_type = response.headers.get('Content-Type', '')
-        print(f"IPFS response status: {response.status_code}, Content-Type: {content_type}") # Log status and type
+        print(f"IPFS response status: {response.status_code}, Content-Type: {content_type}")
 
-        # Be more lenient with content type check, as gateways might vary
         if 'pdf' not in content_type and 'octet-stream' not in content_type:
-            # Check file extension if possible from Content-Disposition
             content_disposition = response.headers.get('Content-Disposition', '')
             if not (content_disposition and '.pdf' in content_disposition.lower()):
-                 print(f"Warning: Unexpected Content-Type from IPFS: {content_type}. Content-Disposition: {content_disposition}. Proceeding anyway.")
-                 # Decide if you want to raise an error or just warn:
-                 # raise HTTPException(status_code=400, detail=f"IPFS content may not be a PDF (Type: {content_type}, Hash: {ipfs_hash})")
+                 print(f"Warning: Unexpected Content-Type from IPFS: {content_type}. Proceeding anyway.")
 
         pdf_content = response.content
         if not pdf_content:
@@ -167,19 +137,15 @@ def fetch_pdf_from_ipfs(ipfs_hash: str) -> bytes:
         print(f"Successfully fetched {len(pdf_content)} bytes from IPFS.")
         return pdf_content
     except requests.exceptions.Timeout:
-        print(f"Error: Timeout fetching PDF from IPFS ({gateway_url})")
         raise HTTPException(status_code=504, detail=f"Timeout fetching PDF from IPFS ({gateway_url})")
     except requests.exceptions.RequestException as e:
-        print(f"Error: Could not fetch PDF from IPFS ({gateway_url}): {e}")
         raise HTTPException(status_code=503, detail=f"Could not fetch PDF from IPFS ({gateway_url}): {e}")
     except Exception as e:
-        print(f"Error: Unexpected error processing IPFS fetch: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing IPFS fetch: {e}")
 
 
 # --- Helper Function: Extract Data from Large Dummy ABHA DB ---
 def get_simplified_abha_data(database_filepath: str, identifier: str) -> Optional[dict]:
-    # (This function remains exactly the same as the previous version)
     try:
         with open(database_filepath, 'r', encoding='utf-8') as f:
             full_data = json.load(f)
@@ -244,12 +210,10 @@ def get_simplified_abha_data(database_filepath: str, identifier: str) -> Optiona
     return simplified_data
 
 
-# --- UPGRADED Rule Engine (MODIFIED __init__ and text extraction) ---
+# --- UPGRADED Rule Engine ---
 class RuleEngine:
-    # MODIFIED: Takes pdf_content directly
     def __init__(self, pdf_content: bytes, abha_data: AbhaRecord):
         self.pdf_content = pdf_content
-        # Extract text internally using a new private method
         self.pdf_text = self._extract_text_from_pdf_internal()
         if not self.pdf_text:
              raise ValueError("Could not extract text from the provided PDF content. Is it an image PDF?")
@@ -268,29 +232,21 @@ class RuleEngine:
         }
         self.policy = MOCK_POLICY_DB.get(abha_data.abha_id, {})
 
-    # NEW: Internal text extraction method
     def _extract_text_from_pdf_internal(self) -> str:
         text = ""
         try:
-            # Use fitz (PyMuPDF) to open the PDF content from memory
             with fitz.open(stream=self.pdf_content, filetype="pdf") as doc:
                 for page in doc:
-                    page_text = page.get_text("text") # Ensure text extraction
+                    page_text = page.get_text("text") 
                     if page_text:
                         text += page_text
-                    else:
-                        print(f"Warning: Page {page.number} seems to have no extractable text.")
-                        # Optionally, add OCR fallback here if needed in future
         except Exception as e:
             print(f"Error extracting PDF text internally: {e}")
-            # Do not raise HTTPException here, let the __init__ handle it
-            return "" # Return empty string on failure
+            return ""
         return text
 
-    # run_all_checks and all _check_* methods remain exactly the same as the previous version
     def run_all_checks(self) -> Tuple[int, List[str], List[str]]:
-        """Runs all rule checks."""
-        self._extract_data_from_pdf() # Populates self.extracted
+        self._extract_data_from_pdf() 
 
         checks_to_run = [
             self._check_identity, self._check_medical_history, self._check_medication_disease_consistency,
@@ -307,7 +263,6 @@ class RuleEngine:
         return self.risk_score, self.detailed_analysis, self.red_flags
 
     def _extract_data_from_pdf(self):
-        # (This method remains exactly the same as the previous version)
         try: self.extracted["age"] = relativedelta(datetime.now(), date_parse(self.abha.dob, dayfirst=True)).years
         except: pass
         self.extracted["file_hash"] = hashlib.sha256(self.pdf_content).hexdigest()
@@ -316,7 +271,7 @@ class RuleEngine:
              line_upper = lines[i].strip().upper()
              if "CLINIC" in line_upper or "HOSPITAL" in line_upper or "MEDICAL CENTER" in line_upper:
                  self.extracted["provider_name"] = line_upper; provider_found = True; break
-        if not provider_found and len(lines) > 1: self.extracted["provider_name"] = lines[1].strip().upper() # Fallback
+        if not provider_found and len(lines) > 1: self.extracted["provider_name"] = lines[1].strip().upper() 
         total_match = re.search(r"(net amount|total amount|net payable).*?([\d,]+\.?\d{2})", self.pdf_lower, re.DOTALL | re.IGNORECASE)
         if total_match:
             try: self.extracted["total_amount"] = float(total_match.group(2).replace(",", ""))
@@ -325,7 +280,7 @@ class RuleEngine:
         if date_match:
             try: self.extracted["bill_date"] = date_parse(date_match.group(1).replace('/', '-'), dayfirst=True)
             except: pass
-        reg_match = re.search(r"reg(?:istration)?\.?\s*id:?\s*([A-Za-z0-9/\-]+)", self.pdf_text, re.IGNORECASE) # Allow '/'
+        reg_match = re.search(r"reg(?:istration)?\.?\s*id:?\s*([A-Za-z0-9/\-]+)", self.pdf_text, re.IGNORECASE) 
         if reg_match: self.extracted["doc_reg_id"] = reg_match.group(1).upper()
         diag_patterns = [r"diagnosis:?\s*(?:[A-Z]\d{2}(?:\.\d+)?)\s*-\s*([\w\s\(\),/\-]+)", r"primary diagnosis:?\s*([\w\s\(\),/\-]+)", r"secondary diagnosis:?\s*([\w\s\(\),/\-]+)", r"provisional diagnosis:?\s*([\w\s\(\),/\-]+)"]
         found_diags = set();
@@ -343,11 +298,7 @@ class RuleEngine:
                  if med_name_cleaned and len(med_name_cleaned) > 3 and not is_ignored: found_meds.add(med_name_cleaned)
         self.extracted["medications"] = list(found_meds)
 
-
-    # ALL _check_* methods remain exactly the same as the previous 'full code' version
-    # (No need to repeat them all here, just copy them from the previous response)
-    # --- Start copy from previous code ---
-    def _check_identity(self): # Rule 1
+    def _check_identity(self): 
         alerts = [];
         if self.abha.name.lower() not in self.pdf_lower: alerts.append("Name Mismatch")
         if self.abha.dob not in self.pdf_text: alerts.append("DOB Mismatch")
@@ -358,7 +309,7 @@ class RuleEngine:
         if alerts: self.risk_score += 70; self.red_flags.append(f"Identity Fail: {', '.join(alerts)}.")
         self.detailed_analysis.append("Analysis (Rule 1): Checked Bill vs ABHA identity (Name, DOB, City).")
 
-    def _check_medical_history(self): # Rule 2
+    def _check_medical_history(self): 
         abha_diags_desc = [d.description.lower() for d in self.abha.past_diagnoses]; abha_meds = [m.lower() for m in self.abha.medications]; alerts_diag = []; alerts_med = []
         pdf_diags_found = {diag: False for diag in self.extracted["diagnoses"]}
         for pdf_diag in self.extracted["diagnoses"]:
@@ -375,7 +326,7 @@ class RuleEngine:
         if alerts_med: self.risk_score += 10; self.red_flags.append(f"History Mismatch (Medication): '{', '.join(alerts_med)}' not in ABHA history.")
         self.detailed_analysis.append(f"Analysis (Rule 2b - Medications): Checked PDF medications vs ABHA. Matches: {pdf_meds_found}")
 
-    def _check_medication_disease_consistency(self): # Rule 5
+    def _check_medication_disease_consistency(self): 
         if not self.extracted["medications"] or not self.extracted["diagnoses"]: return; alerts = []
         for med in self.extracted["medications"]:
             med_key = med.split(' ')[0];
@@ -386,7 +337,7 @@ class RuleEngine:
         if alerts: self.risk_score += 10; self.red_flags.append(f"Logic Warn (Drug-Disease): Mismatches found - {'; '.join(alerts)}.")
         self.detailed_analysis.append("Analysis (Rule 5): Checked Medication vs. Diagnosis consistency on the bill.")
 
-    def _check_age_vs_disease(self): # Rule 19
+    def _check_age_vs_disease(self): 
         age = self.extracted["age"];
         if not age or not self.extracted["diagnoses"]: return;
         main_diag = self.extracted["diagnoses"][0];
@@ -395,12 +346,12 @@ class RuleEngine:
             if not (min_age <= age <= max_age): self.risk_score += 40; self.red_flags.append(f"Logic Fail (Age-Disease): Patient age ({age}) is not plausible for '{main_diag}' (Expected: {min_age}-{max_age}).")
         self.detailed_analysis.append(f"Analysis (Rule 19): Checked Age ({age}) vs. Primary Diagnosis ('{main_diag}').")
 
-    def _check_treatment_duration(self): # Rule 6
+    def _check_treatment_duration(self): 
         if "opd" in self.pdf_lower or "outpatient" in self.pdf_lower or "consultation" in self.pdf_lower: self.detailed_analysis.append("Analysis (Rule 6): Treatment duration identified as 'OPD' (plausible).")
         elif self.extracted["admission_date"] and self.extracted["discharge_date"]: self.detailed_analysis.append("Analysis (Rule 6): SKIPPED - In-patient duration logic vs diagnosis not yet implemented.")
         else: self.risk_score += 5; self.red_flags.append("Logic Warn: Treatment type (OPD/In-patient) is unclear from PDF."); self.detailed_analysis.append("Analysis (Rule 6): Could not clearly determine treatment duration type (OPD/Inpatient).")
 
-    def _check_invoice_structure(self): # Rule 22
+    def _check_invoice_structure(self): 
         missing = [];
         if not re.search(r"bill id|invoice no", self.pdf_lower): missing.append("Bill ID")
         if not re.search(r"patient name", self.pdf_lower): missing.append("Patient Name")
@@ -411,7 +362,7 @@ class RuleEngine:
         if missing: self.risk_score += 10; self.red_flags.append(f"Authenticity Warn (Invoice Structure): Missing standard fields: {', '.join(missing)}.");
         self.detailed_analysis.append("Analysis (Rule 22): Checked basic invoice structure.")
 
-    def _check_lab_result_consistency(self): # Rule 20
+    def _check_lab_result_consistency(self): 
         alerts = []; has_asthma = any("asthma" in d for d in self.extracted["diagnoses"]); has_hypertension = any("hypertension" in d for d in self.extracted["diagnoses"]); has_diabetes = any("diabetes" in d for d in self.extracted["diagnoses"]);
         mentions_spirometry = "spirometry" in self.pdf_lower or "pft" in self.pdf_lower; mentions_bp = "blood pressure" in self.pdf_lower or " bp " in self.pdf_lower; mentions_hba1c = "hba1c" in self.pdf_lower or "glycated hemoglobin" in self.pdf_lower;
         if has_asthma and not mentions_spirometry: alerts.append("Spirometry/PFT for Asthma")
@@ -420,7 +371,7 @@ class RuleEngine:
         if alerts: self.risk_score += 5; self.red_flags.append(f"Logic Warn (Lab Consistency): Expected tests missing: {', '.join(alerts)}.");
         self.detailed_analysis.append("Analysis (Rule 20): Checked for expected tests based on diagnosis.")
 
-    def _check_icd_code_consistency(self): # Rule 15
+    def _check_icd_code_consistency(self): 
         found_codes = re.findall(r"([A-Z]\d{2}(?:\.\d+)?)", self.pdf_text); alerts = []
         if not found_codes: self.risk_score += 5; self.red_flags.append("Authenticity Warn: No valid ICD-10 codes found."); self.detailed_analysis.append("Analysis (Rule 15): No ICD codes found."); return
         if "J45" in found_codes and not any("asthma" in d for d in self.extracted["diagnoses"]): alerts.append("J45 code present but 'Asthma' diagnosis missing/mismatched")
@@ -429,7 +380,7 @@ class RuleEngine:
         if alerts: self.risk_score += 10; self.red_flags.append(f"Logic Warn (ICD Consistency): Issues found - {'; '.join(alerts)}.");
         self.detailed_analysis.append(f"Analysis (Rule 15): Checked ICD codes vs diagnosis text. Codes Found: {found_codes}")
 
-    def _check_policy_compliance(self): # Rule 29
+    def _check_policy_compliance(self): 
         if not self.policy: self.detailed_analysis.append("Analysis (Rule 29): SKIPPED - Policy data not found for user in Mock DB."); return; alerts = []
         try:
             wait_days = self.policy.get("waiting_period_days", 30); policy_start = date_parse(self.policy.get("start_date", "1900-01-01")); claim_date = self.extracted["bill_date"] or datetime.now(); sum_insured = self.policy.get("sum_insured", float('inf'));
@@ -439,7 +390,7 @@ class RuleEngine:
             self.detailed_analysis.append("Analysis (Rule 29): Checked policy compliance (Waiting Period, Sum Insured).")
         except Exception as e: self.detailed_analysis.append(f"Analysis (Rule 29): ERROR during policy check - {e}")
 
-    def _check_prescriber_authenticity(self): # Rule 14
+    def _check_prescriber_authenticity(self): 
         reg_id = self.extracted["doc_reg_id"];
         if not reg_id: self.detailed_analysis.append("Analysis (Rule 14): SKIPPED - Doctor Registration ID not found on PDF."); return;
         doc_info = MOCK_MEDICAL_COUNCIL_DB.get(reg_id);
@@ -447,7 +398,7 @@ class RuleEngine:
         elif doc_info.get("status") == "SUSPENDED": self.risk_score += 50; self.red_flags.append(f"Authenticity Fail: Doctor's license ({reg_id} - {doc_info.get('name')}) is SUSPENDED.")
         self.detailed_analysis.append(f"Analysis (Rule 14): Checked doctor's license status ({reg_id}) via Mock Council DB.")
 
-    def _check_provider_behavior(self): # Rule 7
+    def _check_provider_behavior(self): 
         provider = self.extracted["provider_name"];
         if provider == "UNKNOWN": self.detailed_analysis.append("Analysis (Rule 7): SKIPPED - Provider name not clearly extracted from PDF."); return;
         risk_data = MOCK_PROVIDER_RISK_DB.get(provider);
@@ -458,10 +409,10 @@ class RuleEngine:
             elif provider_risk > 50: self.risk_score += 15; self.red_flags.append(f"External Warn: Provider '{provider}' has moderate fraud risk ({provider_risk}).")
         self.detailed_analysis.append(f"Analysis (Rule 7): Checked provider '{provider}' risk score via Mock Risk DB.")
 
-    def _check_outlier_pricing(self): # Rule 26
+    def _check_outlier_pricing(self): 
         self.detailed_analysis.append("Analysis (Rule 26): SKIPPED - Outlier line-item pricing (requires detailed line item extraction & standard pricing DB).")
 
-    def _check_claim_frequency(self): # Rule 4
+    def _check_claim_frequency(self): 
         history = MOCK_USER_CLAIM_HISTORY_DB.get(self.abha.abha_id, []);
         if not history or not self.extracted["bill_date"]: self.detailed_analysis.append("Analysis (Rule 4): Checked claim frequency (No prior history or bill date)."); return;
         claims_in_last_month = 0; current_claim_date = self.extracted["bill_date"];
@@ -473,22 +424,22 @@ class RuleEngine:
         if claims_in_last_month >= 2: self.risk_score += 20; self.red_flags.append(f"History Risk: High claim frequency ({claims_in_last_month + 1} claims within ~30 days).");
         self.detailed_analysis.append(f"Analysis (Rule 4): Checked claim frequency ({claims_in_last_month} other claims in ~30 days found in Mock History).")
 
-    def _check_previous_diagnosis_conflict(self): # Rule 12
+    def _check_previous_diagnosis_conflict(self): 
         abha_diags_str = " ".join(d.description.lower() for d in self.abha.past_diagnoses); pdf_diags_str = " ".join(self.extracted["diagnoses"]); is_unrelated = False
         if "arthritis" in pdf_diags_str and "arthritis" not in abha_diags_str and "diabetes" in abha_diags_str: is_unrelated = True
         if "cancer" in pdf_diags_str and "cancer" not in abha_diags_str and "hypertension" in abha_diags_str: is_unrelated = True
         if is_unrelated: self.risk_score += 10; self.red_flags.append("History Warn: Claim diagnosis seems unrelated to known chronic conditions in ABHA.");
         self.detailed_analysis.append("Analysis (Rule 12): Basic check for conflict between new claim and chronic history.")
 
-    def _check_medication_refill_velocity(self): # Rule 13
+    def _check_medication_refill_velocity(self): 
         self.detailed_analysis.append("Analysis (Rule 13): SKIPPED - Medication refill velocity (needs historical prescription DB).")
 
-    def _check_document_tampering(self): # Rule 8
+    def _check_document_tampering(self): 
         non_ascii_count = len(re.findall(r'[^\x00-\x7F\s]', self.pdf_text));
         if non_ascii_count > 20: self.risk_score += 5; self.red_flags.append(f"Authenticity Warn (Tampering?): High count ({non_ascii_count}) of unusual characters found.");
         self.detailed_analysis.append("Analysis (Rule 8): Basic check for signs of document tampering (unusual character count).")
 
-    def _check_duplicate_document(self): # Rule 10
+    def _check_duplicate_document(self): 
         file_hash = self.extracted["file_hash"];
         if file_hash in MOCK_DUPLICATE_HASH_DB: self.risk_score += 100; self.red_flags.append(f"Authenticity Fail (Duplicate): Document hash {file_hash[:8]}... found in Mock DB (Claim {MOCK_DUPLICATE_HASH_DB[file_hash]}).")
         self.detailed_analysis.append("Analysis (Rule 10): Checked document hash against Mock Duplicate DB.")
@@ -498,10 +449,8 @@ class RuleEngine:
         for rule_num, desc in skipped_rules.items(): self.detailed_analysis.append(f"Analysis (Rule {rule_num}): SKIPPED - {desc} (Requires external data or advanced analysis).")
         self.detailed_analysis.append("Analysis (Rule 30): PASSED - Explainability provided via this detailed analysis.")
 
-    # --- End copy ---
 
-
-# --- Helper Function 4: Groq AI (Updated Prompt) ---
+# --- Helper Function 4: Groq AI ---
 def get_ai_score_and_reasoning(
     pre_risk_score: int,
     detailed_analysis: List[str],
@@ -513,7 +462,7 @@ def get_ai_score_and_reasoning(
         rec = "PENDING REVIEW"; score = pre_risk_score
         if pre_risk_score >= 100 or any("Fail" in flag for flag in red_flags): rec = "REJECT"; score = max(score, 85)
         elif pre_risk_score == 0 and not red_flags: rec = "APPROVE"; score = min(score, 25)
-        return score, "AI Error: Client not initialized. Recommendation based on rule score.", rec
+        return score, "AI Error: Gemini client not initialized. Recommendation based on rule score.", rec
 
     prompt = f"""
     Analyze the insurance claim based on the Rule Engine's findings. Provide a final aggregate_score (0-100), reasoning, and recommendation ('APPROVE', 'REJECT', 'PENDING REVIEW').
@@ -530,7 +479,7 @@ def get_ai_score_and_reasoning(
     4.  **Rule Analysis Steps:** (Review for context, includes SKIPPED rules)
 
     **Your Task:**
-    1.  **Cost Plausibility:** Assess if the 'total_amount' (₹{extracted_data.get('total_amount', 0)}) is reasonable for the primary 'diagnosis' ('{extracted_data.get('diagnoses', ["N/A"])[0]}'). Use general medical cost knowledge. Add this to your reasoning.
+    1.  **Cost Plausibility:** Assess if the 'total_amount' (₹{extracted_data.get('total_amount', 0)}) is reasonable for the primary 'diagnosis' ('{(extracted_data.get('diagnoses') or ["N/A"])[0]}'). Use general medical cost knowledge. Add this to your reasoning.
     2.  **Recommendation Logic:**
         * If any "Fail" (Identity Fail, Logic Fail, Policy Fail, Authenticity Fail) red flags exist OR pre_risk_score >= 100: Recommend REJECT.
         * If pre_risk_score == 0 AND there are NO red flags AND cost seems plausible: Recommend APPROVE.
@@ -543,21 +492,21 @@ def get_ai_score_and_reasoning(
     """
 
     try:
-        chat_completion = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant", # Use current model
-            response_format={"type": "json_object"},
-            temperature=0.1,
-            max_tokens=400 # Increased token limit for more detailed reasoning
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=genai.types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1
+            )
         )
-        response_content = chat_completion.choices[0].message.content
+        response_content = response.text
         response_json = json.loads(response_content)
 
         rec = response_json.get("recommendation", "REJECT").upper()
         score = int(response_json.get("aggregate_score", 99))
         reason = response_json.get("reasoning", "AI did not provide reasoning.")
 
-        # Adjust score to fit recommendation range if AI output is inconsistent
         if rec == "APPROVE" and score > 30: score = 25
         elif rec == "PENDING REVIEW" and (score < 31 or score > 70): score = 50
         elif rec == "REJECT" and score < 71: score = 85
@@ -565,25 +514,20 @@ def get_ai_score_and_reasoning(
         return score, reason, rec
 
     except Exception as e:
-        print(f"Groq API error: {e}")
+        print(f"Gemini API error: {e}")
         rec = "PENDING REVIEW"
         if pre_risk_score >= 100 or any("Fail" in flag for flag in red_flags): rec = "REJECT"
         elif pre_risk_score == 0 and not red_flags: rec = "APPROVE"
-        # Return pre_risk_score if AI fails, clamped to 0-100
         fail_score = max(0, min(100, pre_risk_score))
         return fail_score, f"AI Error: {e}. Recommendation based on rule score.", rec
 
 
 # --- MAIN API ENDPOINT ---
 @app.post("/verify-claim/")
-# MODIFIED: Accepts JSON input via ClaimRequest model
 async def verify_claim(request: ClaimRequest):
     print(f"Received request for ABHA ID: {request.abha_identifier}, IPFS Hash: {request.ipfs_hash}")
     try:
-        # Step 1: Fetch PDF from IPFS
         pdf_content = fetch_pdf_from_ipfs(request.ipfs_hash)
-
-        # Step 2: Fetch ABHA data using identifier
         simplified_abha_dict = get_simplified_abha_data("dummy_abha_database.json", request.abha_identifier)
 
         if not simplified_abha_dict:
@@ -594,27 +538,24 @@ async def verify_claim(request: ClaimRequest):
         print(f"Successfully fetched and parsed ABHA data for {abha_data.name}.")
 
     except HTTPException as e:
-        raise e # Re-raise HTTP exceptions from helpers
+        raise e 
     except Exception as e:
         print(f"Error during input processing: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid Input or DB Error: {e}")
 
-    # Step 3: Run Rule Engine
     try:
         print("Initializing Rule Engine...")
         engine = RuleEngine(pdf_content, abha_data)
         print("Running all checks...")
         pre_risk_score, detailed_analysis, red_flags = engine.run_all_checks()
         print(f"Rule Engine finished. Pre-risk score: {pre_risk_score}, Red Flags: {len(red_flags)}")
-    except ValueError as e: # Catch PDF text extraction error specifically
+    except ValueError as e: 
         print(f"Error: Rule Engine failed on PDF extraction: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         print(f"Error: Unexpected error during rule execution: {e}")
-        # Consider logging the full traceback here for debugging
         raise HTTPException(status_code=500, detail=f"Error during rule execution: {e}")
 
-    # Step 4: Get AI Score
     print("Getting AI score and reasoning...")
     final_score, final_reasoning, final_recommendation = get_ai_score_and_reasoning(
         pre_risk_score, detailed_analysis, red_flags, engine.extracted
@@ -622,15 +563,13 @@ async def verify_claim(request: ClaimRequest):
     print(f"AI Result - Score: {final_score}, Recommendation: {final_recommendation}")
 
 
-    # Step 5: Final consistency check based on hard failures
     hard_failure = pre_risk_score >= 100 or any("Fail" in flag for flag in red_flags)
     if hard_failure and final_recommendation != "REJECT":
         print(f"Overriding AI recommendation. Hard failure detected (Score: {pre_risk_score}, Flags: {red_flags})")
-        final_score = max(final_score, 85) # Ensure reject score
+        final_score = max(final_score, 85) 
         final_recommendation = "REJECT"
         final_reasoning = f"[AUTO-REJECTED due to hard rule failure]. AI Reason: {final_reasoning}"
 
-    # Step 6: Return comprehensive response
     print("Sending final response.")
     return {
         "aggregate_score": final_score,
@@ -640,17 +579,14 @@ async def verify_claim(request: ClaimRequest):
         "red_flags": red_flags,
         "detailed_analysis_steps": detailed_analysis,
         "extracted_data_points": engine.extracted,
-        "simplified_abha_data_used": simplified_abha_dict # Include the ABHA data used
+        "simplified_abha_data_used": simplified_abha_dict 
     }
 
 # --- Server Run Command ---
 if __name__ == "__main__":
-    import uvicorn
-    # Make sure dummy_abha_database.json is in the same directory
     db_file = "dummy_abha_database.json"
     if not os.path.exists(db_file):
         print(f"\nERROR: '{db_file}' file not found.")
-        print("Please create it with the large JSON data provided earlier.\n")
     else:
         print(f"Found '{db_file}'. Starting server...")
         uvicorn.run(app, host="0.0.0.0", port=8000)

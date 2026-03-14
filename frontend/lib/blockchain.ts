@@ -25,7 +25,8 @@ const CONTRACT_ABI = [
   "function getMyPolicies(address _userAddress) external view returns (tuple(uint256 policyId, address userAddress, uint256 purchaseDate, uint256 expiryDate, uint256 premiumPaidWei, uint256 monthlyPremiumWei, bool active, uint256 tokenId, string metadataUri, uint256 escrowId, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup)[])",
 
   // Claims (uses ClaimParams struct)
-  "function claimPolicy(tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName) params) external",
+  "function claimPolicy(tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName, address userAddress) params) external",
+  "function sendOCRRequest(string source, bytes encryptedSecretsReference, uint8 donHostedSecretsSlotID, uint64 donHostedSecretsVersion, string[] args, uint32 callbackGasLimit, tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName, address userAddress) claimParams) external returns (bytes32 requestId)",
   "function approveClaim(uint256 _claimId) external",
   "function rejectClaim(uint256 _claimId) external",
   "function getClaimStatus(uint256 _claimId) external view returns (uint32, uint256, uint32)",
@@ -64,15 +65,26 @@ const CONTRACT_ABI = [
   "event ContractInitialized(address indexed admin)",
 ];
 
+const VIEWS_CONTRACT_ABI = [
+  "function getAllPolicies() external view returns (tuple(uint256 policyId, string title, string description, uint32 policyType, uint256 monthlyPremium, uint256 yearlyPremium, uint256 coverageAmount, uint256 minAge, uint256 maxAge, uint256 durationDays, uint256 waitingPeriodDays, uint256 createdAt, address createdBy)[])",
+  "function getMyPolicies(address _userAddress) external view returns (tuple(uint256 policyId, address userAddress, uint256 purchaseDate, uint256 expiryDate, uint256 premiumPaidWei, uint256 monthlyPremiumWei, bool active, uint256 tokenId, string metadataUri, uint256 escrowId, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup)[])",
+  "function getAllClaims() external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
+  "function getUserClaims(address _userAddress) external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
+  "function getClaimsByAbhaId(string _abhaId) external view returns (tuple(uint256 claimId, uint256 policyId, address userAddress, uint256 claimAmount, uint32 aggregateScore, uint32 status, uint256 claimedAt, uint256 processedAt, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName)[])",
+  "function verifyIpfsCidInClaim(string _ipfsCid) external view returns (bool)",
+  "function getNFTMetadata(uint256 _tokenId) external view returns (tuple(string name, string description, string imageUri, uint256 coverageAmount, uint256 validityStart, uint256 validityEnd, uint256 premiumAmount, uint32 policyType, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup))"
+];
+
 // ==========================================
 // Configuration
 // ==========================================
 export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+export const VIEWS_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_VIEWS_CONTRACT_ADDRESS || "";
 
 export const SUPPORTED_CHAINS: Record<number, { name: string; rpcUrl: string; blockExplorer: string }> = {
   11155111: {
     name: "Sepolia Testnet",
-    rpcUrl: "https://eth-sepolia.g.alchemy.com/v2/demo",
+    rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
     blockExplorer: "https://sepolia.etherscan.io",
   },
   31337: {
@@ -190,8 +202,8 @@ export function convertETHToINR(ethAmount: number | bigint): number {
 }
 
 export function formatETH(ethAmount: number | bigint | string): string {
-  const amount = typeof ethAmount === "bigint" ? parseFloat(ethers.formatEther(ethAmount)) 
-               : typeof ethAmount === "string" ? parseFloat(ethAmount) : Number(ethAmount);
+  const amount = typeof ethAmount === "bigint" ? parseFloat(ethers.formatEther(ethAmount))
+    : typeof ethAmount === "string" ? parseFloat(ethAmount) : Number(ethAmount);
   return amount.toFixed(6) + " ETH";
 }
 
@@ -262,6 +274,14 @@ function getReadContract(): ethers.Contract {
     throw new Error("Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS in .env.local");
   }
   return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+}
+
+function getViewsContract(): ethers.Contract {
+  const provider = getReadProvider();
+  if (!VIEWS_CONTRACT_ADDRESS) {
+    throw new Error("Views contract address not configured. Set NEXT_PUBLIC_VIEWS_CONTRACT_ADDRESS in .env.local");
+  }
+  return new ethers.Contract(VIEWS_CONTRACT_ADDRESS, VIEWS_CONTRACT_ABI, provider);
 }
 
 async function getWriteContract(): Promise<ethers.Contract> {
@@ -398,7 +418,7 @@ export async function createPolicy(policyData: {
 
 export async function getAllPolicies(): Promise<BlockchainPolicy[]> {
   try {
-    const contract = getReadContract();
+    const contract = getViewsContract();
     const policies = await contract.getAllPolicies();
 
     return policies.map((p: any) => ({
@@ -485,7 +505,7 @@ export async function purchasePolicy(
 
 export async function getUserPolicies(walletAddress: string): Promise<BlockchainUserPolicy[]> {
   try {
-    const contract = getReadContract();
+    const contract = getViewsContract();
     const policies = await contract.getMyPolicies(walletAddress);
 
     return policies.map((p: any) => ({
@@ -533,9 +553,8 @@ export async function claimPolicy(
     console.log(`📋 Claiming policy:
     - Policy ID: ${numericPolicyId}
     - Aggregate Score: ${aggregateScore}
-    - Expected Status: ${
-      aggregateScore <= 30 ? "APPROVED" : aggregateScore <= 70 ? "PENDING" : "REJECTED"
-    }`);
+    - Expected Status: ${aggregateScore <= 30 ? "APPROVED" : aggregateScore <= 70 ? "PENDING" : "REJECTED"
+      }`);
 
     const contract = await getWriteContract();
 
@@ -548,10 +567,11 @@ export async function claimPolicy(
       oracleRequestId: "",
       claimDescription: "",
       hospitalName: "",
+      userAddress: await getWalletPublicKey(),
     });
 
     const receipt = await tx.wait();
-    console.log("✅ Claim submitted:", receipt.hash);
+    console.log("✅ Claim submitted manually:", receipt.hash);
 
     const policies = await getAllPolicies();
     const policy = policies.find((p) => p.policy_id === numericPolicyId.toString());
@@ -568,6 +588,27 @@ export async function claimPolicy(
   }
 }
 
+export const ORACLE_SOURCE = `
+const abhaId = args[0];
+const ipfsHash = args[1];
+const apiUrl = args[2];
+const apiRequest = Functions.makeHttpRequest({
+  url: apiUrl,
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  data: { ipfs_hash: ipfsHash, abha_identifier: abhaId },
+  timeout: 10000,
+});
+const apiResponse = await apiRequest;
+if (apiResponse.error) {
+  console.error(apiResponse.error);
+  throw Error("API Request failed");
+}
+const data = apiResponse.data;
+const score = data.aggregate_score || 0;
+return Functions.encodeUint256(Math.round(score));
+`;
+
 export async function claimPolicyWithOracle(
   policyId: number,
   aggregateScore: number,
@@ -579,34 +620,51 @@ export async function claimPolicyWithOracle(
 ): Promise<{ success: boolean; transactionHash?: string }> {
   try {
     const contract = await getWriteContract();
+    const userAddress = await getWalletPublicKey();
+    let apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "https://trustlynk-ai.ngrok.app";
+    if (!apiUrl.endsWith("/verify-claim/")) {
+      apiUrl = apiUrl.replace(/\/$/, "") + "/verify-claim/";
+    }
 
-    const tx = await contract.claimPolicy({
-      policyId: policyId,
-      aggregateScore: aggregateScore,
-      abhaId: abhaId,
-      ipfsCid: ipfsCid,
-      oracleRequestId: oracleRequestId,
-      claimDescription: claimDescription,
-      hospitalName: hospitalName,
-    });
+    const args = [abhaId, ipfsCid, apiUrl];
+
+    const tx = await contract.sendOCRRequest(
+      ORACLE_SOURCE,
+      "0x", // encrypted secrets 
+      0,    // slot ID
+      0,    // secrets version
+      args,
+      300000, // callback gas limit
+      {
+        policyId: policyId,
+        aggregateScore: 0, // Placeholder, updated by the DON
+        abhaId: abhaId,
+        ipfsCid: ipfsCid,
+        oracleRequestId: oracleRequestId,
+        claimDescription: claimDescription,
+        hospitalName: hospitalName,
+        userAddress: userAddress,
+      }
+    );
 
     const receipt = await tx.wait();
-    console.log("✅ Claim with oracle data submitted:", receipt.hash);
+    console.log("✅ AI Analysis request sent via Chainlink DON:", receipt.hash);
     return { success: true, transactionHash: receipt.hash };
   } catch (error: any) {
-    console.error("Error claiming with oracle:", error);
+    console.error("Error triggering Chainlink Oracle:", error);
     throw error;
   }
 }
 
+
 export const getNFTMetadata = async (tokenId: string | number): Promise<PolicyNFTMetadata | null> => {
   try {
-    const contract = getReadContract();
-    
+    const contract = getViewsContract();
+
     // Extract numeric portion only: "POLICY_1" → "1"
     const numericId = typeof tokenId === 'string' ? BigInt(tokenId.replace(/\D/g, '')) : BigInt(tokenId);
     const m = await contract.getNFTMetadata(numericId);
-    
+
     return {
       name: m.name,
       description: m.description,
@@ -629,7 +687,7 @@ export const getNFTMetadata = async (tokenId: string | number): Promise<PolicyNF
 
 export async function getUserClaims(userAddress: string): Promise<PolicyClaim[]> {
   try {
-    const contract = getReadContract();
+    const contract = getViewsContract();
     const claims = await contract.getUserClaims(userAddress);
 
     return claims.map((claim: any) => ({
@@ -655,7 +713,7 @@ export async function getUserClaims(userAddress: string): Promise<PolicyClaim[]>
 
 export async function getAllClaims(): Promise<PolicyClaim[]> {
   try {
-    const contract = getReadContract();
+    const contract = getViewsContract();
     const claims = await contract.getAllClaims();
 
     return claims.map((claim: any) => ({

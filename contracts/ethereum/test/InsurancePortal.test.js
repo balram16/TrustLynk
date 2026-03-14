@@ -9,11 +9,13 @@ describe("InsurancePortal", function () {
     [admin, user1, user2] = await ethers.getSigners();
 
     const InsurancePortal = await ethers.getContractFactory("InsurancePortal");
-    portal = await InsurancePortal.deploy();
+    const routerAddress = "0x0000000000000000000000000000000000000000";
+    const donId = ethers.ZeroHash;
+    portal = await InsurancePortal.deploy(routerAddress, donId);
     await portal.waitForDeployment();
-
-    // Initialize
-    await portal.initialize(admin.address);
+ 
+    // Initialize with dummy subId 0
+    await portal.initialize(admin.address, 0);
   });
 
   describe("Initialization", function () {
@@ -23,7 +25,7 @@ describe("InsurancePortal", function () {
     });
 
     it("Should not allow double initialization", async function () {
-      await expect(portal.initialize(admin.address)).to.be.revertedWith("Already initialized");
+      await expect(portal.initialize(admin.address, 0)).to.be.revertedWith("Already initialized");
     });
 
     it("Admin should be registered", async function () {

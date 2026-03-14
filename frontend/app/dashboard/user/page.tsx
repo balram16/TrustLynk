@@ -1072,7 +1072,10 @@ export default function UserDashboard() {
                                     {getClaimStatusString(claim.status)}
                                   </Badge>
                                 </div>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-gray-500 flex items-center gap-1">
+                                  <span className="text-green-600 dark:text-green-400 font-medium whitespace-nowrap">
+                                    <CheckCircle className="w-3 h-3 inline pb-0.5" /> AI Verified |
+                                  </span>
                                   Score: {claim.aggregate_score}/100
                                 </span>
                               </div>

@@ -10,6 +10,7 @@
     "node": "npx hardhat node"
   },
   "devDependencies": {
+    "@chainlink/contracts": "^1.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "hardhat": "^2.22.0"
   },

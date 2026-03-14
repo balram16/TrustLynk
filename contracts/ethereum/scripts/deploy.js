@@ -7,9 +7,23 @@ async function main() {
   console.log("Deploying with account:", deployer.address);
   console.log("Account balance:", ethers.formatEther(await ethers.provider.getBalance(deployer.address)), "ETH\n");
 
+  // Chainlink Functions Config (Sepolia)
+  // Router: 0xb83E47C2bC239B3bf370bc41e1459A34b41238D0
+  // DON ID: 0x66756e2d657468657265756d2d7365706f6c69612d31 (fun-ethereum-sepolia-1)
+  let routerAddress = "0xb83E47C2bC239B3bf370bc41e1459A34b41238D0"; // Sepolia Router
+  let donId = ethers.encodeBytes32String("fun-ethereum-sepolia-1");
+  let subId = 6383; // User's deployed subscription ID
+
+  if (network.name === "localhost" || network.name === "hardhat") {
+    // For local, we use dummy addresses
+    routerAddress = "0x0000000000000000000000000000000000000000";
+    donId = ethers.ZeroHash;
+    subId = 0;
+  }
+
   // Deploy InsurancePortal
   const InsurancePortal = await ethers.getContractFactory("InsurancePortal");
-  const portal = await InsurancePortal.deploy();
+  const portal = await InsurancePortal.deploy(routerAddress, donId);
   await portal.waitForDeployment();
 
   const contractAddress = await portal.getAddress();
@@ -17,9 +31,17 @@ async function main() {
 
   // Initialize the contract
   console.log("\n⚙️  Initializing contract...");
-  const initTx = await portal.initialize(deployer.address);
+  const initTx = await portal.initialize(deployer.address, subId);
   await initTx.wait();
   console.log("✅ Contract initialized with admin:", deployer.address);
+
+  // Deploy InsuranceViews
+  console.log("\n🚀 Deploying InsuranceViews...");
+  const InsuranceViews = await ethers.getContractFactory("InsuranceViews");
+  const views = await InsuranceViews.deploy(contractAddress);
+  await views.waitForDeployment();
+  const viewsAddress = await views.getAddress();
+  console.log("📋 InsuranceViews deployed to:", viewsAddress);
 
   // Verify initialization
   const isInit = await portal.isInitialized();
@@ -91,10 +113,12 @@ async function main() {
   console.log("=".repeat(60));
   console.log("Network:          ", network.name);
   console.log("Contract Address: ", contractAddress);
+  console.log("Views Address:    ", viewsAddress);
   console.log("Admin:            ", deployer.address);
   console.log("=".repeat(60));
   console.log("\n⚡ Update your frontend .env.local with:");
   console.log(`NEXT_PUBLIC_CONTRACT_ADDRESS=${contractAddress}`);
+  console.log(`NEXT_PUBLIC_VIEWS_CONTRACT_ADDRESS=${viewsAddress}`);
   console.log(`NEXT_PUBLIC_CHAIN_ID=${network.config.chainId}`);
 
   // Save deployment info
@@ -103,9 +127,11 @@ async function main() {
     network: network.name,
     chainId: network.config.chainId,
     contractAddress: contractAddress,
+    viewsAddress: viewsAddress,
     admin: deployer.address,
     deployedAt: new Date().toISOString(),
     abi: "artifacts/contracts/InsurancePortal.sol/InsurancePortal.json",
+    viewsAbi: "artifacts/contracts/InsuranceViews.sol/InsuranceViews.json",
   };
 
   const deployDir = "./deployments";

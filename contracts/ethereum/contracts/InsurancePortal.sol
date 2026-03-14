@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/FunctionsClient.sol";
+import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
+
 /**
  * @title InsurancePortal
- * @dev Decentralized insurance platform on Ethereum
- * Converted from Soroban/Rust smart contract for TrustLynk
+ * @dev Decentralized insurance platform on Ethereum with Chainlink Functions integration
  */
-contract InsurancePortal {
+contract InsurancePortal is FunctionsClient {
+    using FunctionsRequest for FunctionsRequest.Request;
     // ==========================================
     // Constants
     // ==========================================
@@ -154,6 +157,7 @@ contract InsurancePortal {
         string oracleRequestId;
         string claimDescription;
         string hospitalName;
+        address userAddress;
     }
 
     // ==========================================
@@ -168,6 +172,15 @@ contract InsurancePortal {
     uint256 public claimCounter;
     uint256 public treasury;
 
+    // Chainlink Functions variables
+    bytes32 public lastRequestId;
+    bytes public lastResponse;
+    bytes public lastError;
+    uint64 public subscriptionId;
+    bytes32 public donId;
+
+    mapping(bytes32 => ClaimParams) private _pendingOracleClaims;
+
     mapping(address => User) private _users;
     address[] public adminList;
 
@@ -175,8 +188,6 @@ contract InsurancePortal {
     mapping(address => UserPolicy[]) private _userPolicies;
 
     mapping(uint256 => UserPolicy[]) private _allUserPolicies; // Reference for numeric lookups
-
-    mapping(uint256 => PolicyNFTMetadata) private _nftMetadata;
     mapping(uint256 => uint256[]) private _policyTokens;
     mapping(address => uint256[]) private _userTokens;
 
@@ -204,31 +215,36 @@ contract InsurancePortal {
     event OracleRequestStored(string requestId, uint256 claimId);
     event OracleStatusUpdated(string requestId, uint32 status);
     event ContractInitialized(address indexed admin);
+    event OCRRequestSent(bytes32 indexed requestId);
+    event OCRResponseReceived(bytes32 indexed requestId, bytes response, bytes err);
 
     // ==========================================
     // Modifiers
     // ==========================================
     modifier onlyAdmin() {
-        require(_isAdmin(msg.sender), "Not admin");
+        require(_isAdmin(msg.sender), "E1");
         _;
     }
 
     modifier onlyInitialized() {
-        require(initialized, "Contract not initialized");
+        require(initialized, "E2");
         _;
     }
 
     // ==========================================
     // Constructor / Initialization
     // ==========================================
-    constructor() {}
+    constructor(address router, bytes32 _donId) FunctionsClient(router) {
+        donId = _donId;
+    }
 
-    function initialize(address _admin) external {
-        require(!initialized, "Already initialized");
-        require(_admin != address(0), "Invalid admin address");
+    function initialize(address _admin, uint64 _subscriptionId) external {
+        require(!initialized, "E3");
+        require(_admin != address(0), "E4");
 
         admin = _admin;
         initialized = true;
+        subscriptionId = _subscriptionId;
         policyCounter = 0;
         tokenCounter = 0;
         escrowCounter = 0;
@@ -250,14 +266,18 @@ contract InsurancePortal {
         emit UserRegistered(_admin, ROLE_ADMIN);
     }
 
+    function setSubscriptionId(uint64 _subscriptionId) external onlyAdmin {
+        subscriptionId = _subscriptionId;
+    }
+
     // ==========================================
     // User Management
     // ==========================================
 
     function registerUser(address _user, uint32 _role) external onlyInitialized {
-        require(_user == msg.sender, "Can only register self");
-        require(_role == ROLE_POLICYHOLDER || _role == ROLE_ADMIN, "Invalid role");
-        require(!_users[_user].registered, "Already registered");
+        require(_user == msg.sender, "E5");
+        require(_role == ROLE_POLICYHOLDER || _role == ROLE_ADMIN, "E6");
+        require(!_users[_user].registered, "E7");
 
         _users[_user] = User({
             wallet: _user,
@@ -323,25 +343,9 @@ contract InsurancePortal {
         return policyCounter;
     }
 
-    function getAllPolicies() external view returns (Policy[] memory) {
-        uint256 count = 0;
-        for (uint256 i = 1; i <= policyCounter; i++) {
-            if (_policies[i].policyId != 0) count++;
-        }
-
-        Policy[] memory result = new Policy[](count);
-        uint256 idx = 0;
-        for (uint256 i = 1; i <= policyCounter; i++) {
-            if (_policies[i].policyId != 0) {
-                result[idx] = _policies[i];
-                idx++;
-            }
-        }
-        return result;
-    }
 
     function getPolicy(uint256 _policyId) external view returns (Policy memory) {
-        require(_policies[_policyId].policyId != 0, "Policy not found");
+        require(_policies[_policyId].policyId != 0, "E8");
         return _policies[_policyId];
     }
 
@@ -350,12 +354,12 @@ contract InsurancePortal {
     // ==========================================
 
     function purchasePolicy(PurchaseParams calldata params) external payable onlyInitialized {
-        require(_users[msg.sender].registered, "User not registered");
-        require(_users[msg.sender].role == ROLE_POLICYHOLDER, "Not policyholder");
+        require(_users[msg.sender].registered, "E9");
+        require(_users[msg.sender].role == ROLE_POLICYHOLDER, "E10");
 
         Policy storage policy = _policies[params.policyId];
-        require(policy.policyId != 0, "Policy not found");
-        require(msg.value >= policy.monthlyPremium, "Insufficient payment");
+        require(policy.policyId != 0, "E11");
+        require(msg.value >= policy.monthlyPremium, "E12");
 
         treasury += msg.value;
 
@@ -378,24 +382,6 @@ contract InsurancePortal {
         uint256 tId = tokenCounter;
 
         uint256 expiryTime = block.timestamp + (policy.durationDays * 1 days);
-
-        // Store NFT metadata
-        _nftMetadata[tId] = PolicyNFTMetadata({
-            name: "TrustLynk Insurance Policy",
-            description: policy.description,
-            imageUri: params.metadataUri,
-            coverageAmount: policy.coverageAmount,
-            validityStart: block.timestamp,
-            validityEnd: expiryTime,
-            premiumAmount: policy.yearlyPremium,
-            policyType: policy.policyType,
-            holderName: params.holderName,
-            holderAge: params.holderAge,
-            holderGender: params.holderGender,
-            holderBloodGroup: params.holderBloodGroup
-        });
-
-        // Create user policy
         UserPolicy memory up = UserPolicy({
             policyId: params.policyId,
             userAddress: msg.sender,
@@ -425,8 +411,7 @@ contract InsurancePortal {
         emit PolicyPurchased(params.policyId, msg.sender, msg.value, _uint2str(tId), escrowCounter);
     }
 
-    function getMyPolicies(address _userAddress) external view returns (UserPolicy[] memory) {
-        require(_users[_userAddress].registered, "User not registered");
+    function getUserPolicies(address _userAddress) external view returns (UserPolicy[] memory) {
         return _userPolicies[_userAddress];
     }
 
@@ -435,11 +420,11 @@ contract InsurancePortal {
     // ==========================================
 
     function claimPolicy(ClaimParams calldata params) external onlyInitialized {
-        require(_users[msg.sender].registered, "User not registered");
-        require(_users[msg.sender].role == ROLE_POLICYHOLDER, "Not policyholder");
+        require(_users[msg.sender].registered, "E14");
+        require(_users[msg.sender].role == ROLE_POLICYHOLDER, "E15");
 
         Policy storage policy = _policies[params.policyId];
-        require(policy.policyId != 0, "Policy not found");
+        require(policy.policyId != 0, "E16");
 
         // Check if user has active policy
         bool hasPolicy = false;
@@ -450,7 +435,7 @@ contract InsurancePortal {
                 break;
             }
         }
-        require(hasPolicy, "User does not have this active policy");
+        require(hasPolicy, "E17");
 
         claimCounter++;
 
@@ -482,9 +467,9 @@ contract InsurancePortal {
         _userClaims[msg.sender].push(claimCounter);
 
         if (status == CLAIM_STATUS_APPROVED) {
-            require(address(this).balance >= policy.coverageAmount, "Insufficient contract balance");
+            require(address(this).balance >= policy.coverageAmount, "E18");
             (bool sent, ) = payable(msg.sender).call{value: policy.coverageAmount}("");
-            require(sent, "ETH transfer failed");
+            require(sent, "E19");
         }
 
         emit ClaimSubmitted(claimCounter, params.policyId, msg.sender, params.aggregateScore, status);
@@ -492,23 +477,23 @@ contract InsurancePortal {
 
     function approveClaim(uint256 _claimId) external onlyInitialized onlyAdmin {
         PolicyClaim storage claim = _claims[_claimId];
-        require(claim.claimId != 0, "Claim not found");
-        require(claim.status == CLAIM_STATUS_PENDING, "Claim not pending");
+        require(claim.claimId != 0, "E20");
+        require(claim.status == CLAIM_STATUS_PENDING, "E21");
 
         claim.status = CLAIM_STATUS_APPROVED;
         claim.processedAt = block.timestamp;
 
-        require(address(this).balance >= claim.claimAmount, "Insufficient contract balance");
+        require(address(this).balance >= claim.claimAmount, "E22");
         (bool sent, ) = payable(claim.userAddress).call{value: claim.claimAmount}("");
-        require(sent, "ETH transfer failed");
+        require(sent, "E23");
 
         emit ClaimApproved(_claimId, claim.userAddress, claim.claimAmount);
     }
 
     function rejectClaim(uint256 _claimId) external onlyInitialized onlyAdmin {
         PolicyClaim storage claim = _claims[_claimId];
-        require(claim.claimId != 0, "Claim not found");
-        require(claim.status == CLAIM_STATUS_PENDING, "Claim not pending");
+        require(claim.claimId != 0, "E24");
+        require(claim.status == CLAIM_STATUS_PENDING, "E25");
 
         claim.status = CLAIM_STATUS_REJECTED;
         claim.processedAt = block.timestamp;
@@ -534,9 +519,118 @@ contract InsurancePortal {
 
     function updateOracleRequestStatus(string calldata _requestId, uint32 _status) external onlyInitialized {
         OracleRequestData storage req = _oracleRequests[_requestId];
-        require(req.requestedAt != 0, "Oracle request not found");
+        require(req.requestedAt != 0, "E26");
         req.status = _status;
         emit OracleStatusUpdated(_requestId, _status);
+    }
+
+     /**
+     * @notice Sends a request to the Chainlink DON
+     * @param source JavaScript source code
+     * @param encryptedSecretsReference Encrypted secrets reference
+     * @param donHostedSecretsSlotID Don hosted secrets slot ID
+     * @param donHostedSecretsVersion Don hosted secrets version
+     * @param args Arguments for the script
+     * @param callbackGasLimit Gas limit for the callback
+     * @param claimParams The claim data to process after fulfillment
+     */
+    function sendOCRRequest(
+        string calldata source,
+        bytes calldata encryptedSecretsReference,
+        uint8 donHostedSecretsSlotID,
+        uint64 donHostedSecretsVersion,
+        string[] calldata args,
+        uint32 callbackGasLimit,
+        ClaimParams calldata claimParams
+    ) external onlyInitialized returns (bytes32 requestId) {
+        require(_users[msg.sender].registered, "E14");
+        require(msg.sender == claimParams.userAddress, "Unauthorized");
+
+        bool hasPolicy = false;
+        UserPolicy[] storage ups = _userPolicies[msg.sender];
+        for (uint256 i = 0; i < ups.length; i++) {
+            if (ups[i].policyId == claimParams.policyId && ups[i].active) {
+                hasPolicy = true;
+                break;
+            }
+        }
+        require(hasPolicy, "E17");
+
+        FunctionsRequest.Request memory req;
+        req.initializeRequestForInlineJavaScript(source);
+        if (encryptedSecretsReference.length > 0) req.addSecretsReference(encryptedSecretsReference);
+        if (donHostedSecretsVersion > 0) req.addDONHostedSecrets(donHostedSecretsSlotID, donHostedSecretsVersion);
+        if (args.length > 0) req.setArgs(args);
+        
+        requestId = _sendRequest(req.encodeCBOR(), subscriptionId, callbackGasLimit, donId);
+        _pendingOracleClaims[requestId] = claimParams;
+        lastRequestId = requestId;
+        
+        emit OCRRequestSent(requestId);
+    }
+
+    /**
+     * @notice Callback that DON calls
+     */
+    function fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err) internal override {
+        lastResponse = response;
+        lastError = err;
+        
+        if (err.length == 0 && response.length > 0) {
+            // Success: Finalize the claim with the score returned from DON
+            ClaimParams memory params = _pendingOracleClaims[requestId];
+            if (params.policyId != 0) {
+                // Read score from response (assuming first 32 bytes is uint256 score)
+                uint256 score = abi.decode(response, (uint256));
+                params.aggregateScore = uint32(score);
+                _finalizeClaim(params);
+            }
+        }
+        
+        emit OCRResponseReceived(requestId, response, err);
+    }
+
+    function _finalizeClaim(ClaimParams memory params) internal {
+        Policy storage policy = _policies[params.policyId];
+        claimCounter++;
+
+        uint32 status;
+        if (params.aggregateScore <= 30) {
+            status = CLAIM_STATUS_APPROVED;
+        } else if (params.aggregateScore <= 70) {
+            status = CLAIM_STATUS_PENDING;
+        } else {
+            status = CLAIM_STATUS_REJECTED;
+        }
+
+        _claims[claimCounter] = PolicyClaim({
+            claimId: claimCounter,
+            policyId: params.policyId,
+            userAddress: params.userAddress, // Ensure userAddress is added to ClaimParams struct
+            claimAmount: policy.coverageAmount,
+            aggregateScore: params.aggregateScore,
+            status: status,
+            claimedAt: block.timestamp,
+            processedAt: block.timestamp,
+            abhaId: params.abhaId,
+            ipfsCid: params.ipfsCid,
+            oracleRequestId: params.oracleRequestId,
+            claimDescription: params.claimDescription,
+            hospitalName: params.hospitalName
+        });
+
+        _userClaims[params.userAddress].push(claimCounter);
+        
+        if (status == CLAIM_STATUS_APPROVED) {
+            if (treasury >= policy.coverageAmount) {
+                treasury -= policy.coverageAmount;
+                (bool sent, ) = payable(params.userAddress).call{value: policy.coverageAmount}("");
+                require(sent, "E27");
+                emit ClaimApproved(claimCounter, params.userAddress, policy.coverageAmount);
+            }
+        } else {
+            emit ClaimSubmitted(claimCounter, params.policyId, params.userAddress, params.aggregateScore, status);
+        }
     }
 
     // ==========================================
@@ -549,48 +643,22 @@ contract InsurancePortal {
 
     function getClaimStatus(uint256 _claimId) external view returns (uint32, uint256, uint32) {
         PolicyClaim storage claim = _claims[_claimId];
-        require(claim.claimId != 0, "Claim not found");
+        require(claim.claimId != 0, "E28");
         return (claim.status, claim.claimAmount, claim.aggregateScore);
     }
 
     function getClaimDetails(uint256 _claimId) external view returns (PolicyClaim memory) {
-        require(_claims[_claimId].claimId != 0, "Claim not found");
+        require(_claims[_claimId].claimId != 0, "E29");
         return _claims[_claimId];
     }
 
-    function getAllClaims() external view returns (PolicyClaim[] memory) {
-        uint256 count = 0;
-        for (uint256 i = 1; i <= claimCounter; i++) {
-            if (_claims[i].claimId != 0) count++;
-        }
-
-        PolicyClaim[] memory result = new PolicyClaim[](count);
-        uint256 idx = 0;
-        for (uint256 i = 1; i <= claimCounter; i++) {
-            if (_claims[i].claimId != 0) {
-                result[idx] = _claims[i];
-                idx++;
-            }
-        }
-        return result;
+    function getUserClaimIds(address _userAddress) external view returns (uint256[] memory) {
+        return _userClaims[_userAddress];
     }
 
-    function getUserClaims(address _userAddress) external view returns (PolicyClaim[] memory) {
-        uint256[] storage claimIds = _userClaims[_userAddress];
-        PolicyClaim[] memory result = new PolicyClaim[](claimIds.length);
-        for (uint256 i = 0; i < claimIds.length; i++) {
-            result[i] = _claims[claimIds[i]];
-        }
-        return result;
-    }
 
-    function getUserTokensList(address _userAddress) external view returns (uint256[] memory) {
-        return _userTokens[_userAddress];
-    }
 
-    function getPolicyTokensList(uint256 _policyId) external view returns (uint256[] memory) {
-        return _policyTokens[_policyId];
-    }
+
 
     function getTotalTokens() external view returns (uint256) {
         return tokenCounter;
@@ -600,10 +668,7 @@ contract InsurancePortal {
         return treasury;
     }
 
-    function getNFTMetadata(uint256 _tokenId) external view returns (PolicyNFTMetadata memory) {
-        require(_tokenOwners[_tokenId] != address(0), "Token does not exist");
-        return _nftMetadata[_tokenId];
-    }
+
 
     // ==========================================
     // ERC721 Interface Functions
@@ -618,20 +683,19 @@ contract InsurancePortal {
     }
 
     function balanceOf(address _owner) external view returns (uint256) {
-        require(_owner != address(0), "Zero address");
+        require(_owner != address(0), "E31");
         return _balances[_owner];
     }
 
     function ownerOf(uint256 _tokenId) external view returns (address) {
         address owner = _tokenOwners[_tokenId];
-        require(owner != address(0), "Token does not exist");
+        require(owner != address(0), "E32");
         return owner;
     }
 
     function tokenURI(uint256 _tokenId) external view returns (string memory) {
-        require(_tokenOwners[_tokenId] != address(0), "Token does not exist");
+        require(_tokenOwners[_tokenId] != address(0), "E33");
         
-        // Find metadataUri from user policies
         address owner = _tokenOwners[_tokenId];
         UserPolicy[] storage policies = _userPolicies[owner];
         for(uint i = 0; i < policies.length; i++) {
@@ -652,35 +716,9 @@ contract InsurancePortal {
         return _oracleRequests[_requestId];
     }
 
-    function verifyIpfsCidInClaim(string calldata _ipfsCid) external view returns (bool) {
-        bytes32 target = keccak256(bytes(_ipfsCid));
-        for (uint256 i = 1; i <= claimCounter; i++) {
-            if (_claims[i].claimId != 0 && keccak256(bytes(_claims[i].ipfsCid)) == target) {
-                return true;
-            }
-        }
-        return false;
-    }
 
-    function getClaimsByAbhaId(string calldata _abhaId) external view returns (PolicyClaim[] memory) {
-        bytes32 target = keccak256(bytes(_abhaId));
-        uint256 count = 0;
-        for (uint256 i = 1; i <= claimCounter; i++) {
-            if (_claims[i].claimId != 0 && keccak256(bytes(_claims[i].abhaId)) == target) {
-                count++;
-            }
-        }
 
-        PolicyClaim[] memory result = new PolicyClaim[](count);
-        uint256 idx = 0;
-        for (uint256 i = 1; i <= claimCounter; i++) {
-            if (_claims[i].claimId != 0 && keccak256(bytes(_claims[i].abhaId)) == target) {
-                result[idx] = _claims[i];
-                idx++;
-            }
-        }
-        return result;
-    }
+
 
     // ==========================================
     // Utility Functions

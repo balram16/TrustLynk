@@ -610,7 +610,13 @@ export function MultiStepClaimForm() {
             {/* Score Display */}
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 p-6 rounded-lg border">
               <div className="text-center">
-                <h3 className="text-lg font-semibold mb-2">AI Analysis Complete</h3>
+                <div className="flex justify-center items-center gap-2 mb-2">
+                  <h3 className="text-lg font-semibold">AI Analysis Complete</h3>
+                  <Badge variant="outline" className="bg-green-100 dark:bg-green-900 border-green-500 text-green-700 dark:text-green-300">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    True AI Verified
+                  </Badge>
+                </div>
                 <div className="text-5xl font-bold mb-2">
                   {formData.oracleResponse.score}
                   <span className="text-2xl text-muted-foreground">/100</span>

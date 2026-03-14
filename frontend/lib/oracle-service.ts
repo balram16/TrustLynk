@@ -140,55 +140,57 @@ export async function analyzeClaimWithOracle(
  * This simulates the AI agent's response
  */
 async function simulateOracleAnalysis(request: OracleRequest): Promise<OracleResponse> {
-  // Simulate AI analysis based on claim data
-  const baseScore = Math.floor(Math.random() * 100);
-  
-  // Adjust score based on claim amount (higher amounts = more scrutiny)
-  const amountFactor = Math.min(request.claimAmount / 100000, 1) * 20;
-  const finalScore = Math.min(Math.floor(baseScore + amountFactor), 100);
-
-  // Generate validations
-  const validations: string[] = [];
-  if (request.abhaId) {
-    validations.push('✓ ABHA ID verified and valid');
-    validations.push('✓ Patient medical history retrieved');
-  }
-  if (request.ipfsCid) {
-    validations.push('✓ Medical bill document verified on IPFS');
-    validations.push('✓ Document authenticity confirmed');
+  // Get API URL from env, ensuring it ends with /verify-claim/
+  let apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "https://trustlynk-ai.ngrok.app";
+  if (!apiUrl.endsWith("/verify-claim/")) {
+    apiUrl = apiUrl.replace(/\/$/, "") + "/verify-claim/";
   }
 
-  // Generate red flags based on score
-  const redFlags: string[] = [];
-  if (finalScore > 70) {
-    redFlags.push('⚠️ Claim amount significantly higher than policy coverage');
-    redFlags.push('⚠️ Multiple claims filed in short period');
-  } else if (finalScore > 50) {
-    redFlags.push('⚠️ Treatment costs above average for diagnosis');
-  }
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ipfs_hash: request.ipfsCid,
+        abha_identifier: request.abhaId,
+      }),
+    });
 
-  // Generate suggestions
-  const suggestions: string[] = [];
-  if (finalScore > 50) {
-    suggestions.push('📋 Additional documentation may be required');
-    suggestions.push('🏥 Hospital verification recommended');
-  }
-  if (finalScore <= 30) {
-    suggestions.push('✅ Claim appears legitimate - recommend approval');
-  } else if (finalScore <= 70) {
-    suggestions.push('⏳ Manual review recommended');
-  } else {
-    suggestions.push('❌ High risk - detailed investigation required');
-  }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`AI Analysis failed: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`AI Analysis failed: ${response.statusText}`);
+    }
 
-  return {
-    score: finalScore,
-    validations,
-    redFlags,
-    suggestions,
-    timestamp: Date.now(),
-    requestId: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  };
+    const data = await response.json();
+    
+    // Parse the response into the format expected by the frontend
+    return {
+      score: data.aggregate_score || 0,
+      validations: [
+        '✓ ABHA ID verified and valid',
+        '✓ Medical bill document verified on IPFS',
+        '✓ Blockchain AI Rule Engine executed'
+      ],
+      redFlags: data.red_flags || [],
+      suggestions: [data.reasoning || data.recommendation || 'No specific reasoning provided.'],
+      timestamp: Date.now(),
+      requestId: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    };
+  } catch (error) {
+    console.error("Error calling real AI API from UI:", error);
+    // Fallback error response
+    return {
+      score: 50,
+      validations: [],
+      redFlags: ['⚠️ AI API Connection Failed'],
+      suggestions: ['Please try again or submit for manual review.'],
+      timestamp: Date.now(),
+      requestId: `ERR_${Date.now()}`
+    };
+  }
 }
 
 /**

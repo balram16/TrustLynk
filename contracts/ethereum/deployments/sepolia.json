@@ -1,0 +1,10 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "contractAddress": "0x9eAd04CD991004de1E90131a788134daDb310D56",
+  "viewsAddress": "0x0554Bfcc4FF9252b65e536b0E923cB76d25031f7",
+  "admin": "0x2819CEcE69941C6397fb2901dda0ca64DB7E09C6",
+  "deployedAt": "2026-03-14T18:58:26.347Z",
+  "abi": "artifacts/contracts/InsurancePortal.sol/InsurancePortal.json",
+  "viewsAbi": "artifacts/contracts/InsuranceViews.sol/InsuranceViews.json"
+}

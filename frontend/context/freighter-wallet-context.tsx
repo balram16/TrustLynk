@@ -272,7 +272,16 @@ export function MetaMaskWalletProvider({ children }: { children: ReactNode }) {
           description: 'You are now registered as a Policy Holder'
         })
       } else {
-        throw new Error('Registration failed')
+        // If it's the E7 error, they are already registered, which is fine
+        if (result.error && (result.error.includes("E7") || result.error.includes("already registered"))) {
+           setUserRole('holder')
+           localStorage.setItem('userRole', 'holder')
+           toast.success('Welcome Back', {
+             description: 'You are already registered.'
+           })
+        } else {
+           throw new Error(result.error || 'Registration failed')
+        }
       }
     } catch (error: any) {
       console.error('Error registering as holder:', error)

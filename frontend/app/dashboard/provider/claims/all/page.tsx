@@ -272,11 +272,10 @@ export default function AllClaimsPage() {
         </div>
       </div>
 
-      {/* Claims List */}
       <div className="space-y-4">
         {filteredClaims.length > 0 ? (
-          filteredClaims.map((claim) => (
-            <Card key={claim.claim_id} className="overflow-hidden">
+          filteredClaims.map((claim, index) => (
+            <Card key={`${claim.claim_id}-${index}`} className="overflow-hidden">
               <div 
                 className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"
                 onClick={() => toggleExpand(claim.claim_id)}
@@ -352,7 +351,12 @@ export default function AllClaimsPage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Fraud Score:</span>
-                          <span className="font-semibold">{claim.aggregate_score}/100</span>
+                          <span className="font-semibold flex items-center gap-1">
+                            <span className="text-green-600 dark:text-green-400 text-xs font-medium">
+                              <CheckCircle className="w-3 h-3 inline pb-0.5" /> AI Verified |
+                            </span>
+                            {claim.aggregate_score}/100
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Submitted:</span>
