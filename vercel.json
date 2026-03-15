@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 12,  
   "framework": "nextjs",
   "installCommand": "pnpm install --no-frozen-lockfile || npm install --legacy-peer-deps",
   "buildCommand": "pnpm build || npm run build",
