@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { 
   getAllClaims,
   approveClaim,
+  rejectClaim,
   getClaimStatusString,
   getClaimStatusColor,
   CLAIM_STATUS_APPROVED,
@@ -37,6 +38,7 @@ export default function ClaimsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [approvingId, setApprovingId] = useState<string | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
   
   const { walletAddress, userRole } = useFreighterWallet()
   const { toast } = useToast()
@@ -98,6 +100,27 @@ export default function ClaimsPage() {
       })
     } finally {
       setApprovingId(null)
+    }
+  }
+
+  const handleRejectClaim = async (claimId: string) => {
+    setRejectingId(claimId)
+    try {
+      await rejectClaim(Number(claimId))
+      toast({
+        title: "🚫 Claim Rejected",
+        description: `Claim #${claimId} rejected on blockchain.`,
+      })
+      await fetchClaims()
+    } catch (error: any) {
+      console.error("Error rejecting claim:", error)
+      toast({
+        title: "Rejection Failed",
+        description: error?.reason || error?.message || "Failed to reject claim",
+        variant: "destructive",
+      })
+    } finally {
+      setRejectingId(null)
     }
   }
 
@@ -362,18 +385,32 @@ export default function ClaimsPage() {
                             <p className="text-sm font-semibold text-yellow-800">
                               ⏳ Pending Review - Fraud score: {claim.aggregate_score}/100
                             </p>
-                            <Button 
-                              size="sm" 
-                              className="bg-green-600 hover:bg-green-700"
-                              disabled={approvingId === claim.claim_id}
-                              onClick={() => handleApproveClaim(claim.claim_id)}
-                            >
-                              {approvingId === claim.claim_id ? (
-                                <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Approving...</>
-                              ) : (
-                                "Approve Claim"
-                              )}
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                className="bg-green-600 hover:bg-green-700"
+                                disabled={approvingId === claim.claim_id || rejectingId === claim.claim_id}
+                                onClick={() => handleApproveClaim(claim.claim_id)}
+                              >
+                                {approvingId === claim.claim_id ? (
+                                  <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Approving...</>
+                                ) : (
+                                  "Approve"
+                                )}
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="destructive"
+                                disabled={approvingId === claim.claim_id || rejectingId === claim.claim_id}
+                                onClick={() => handleRejectClaim(claim.claim_id)}
+                              >
+                                {rejectingId === claim.claim_id ? (
+                                  <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Rejecting...</>
+                                ) : (
+                                  "Reject"
+                                )}
+                              </Button>
+                            </div>
                           </div>
                         )}
 

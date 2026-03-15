@@ -18,9 +18,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    from google import genai
+    from groq import Groq
 except ImportError:
-    genai = None
+    Groq = None
 
 # --- FastAPI App ---
 app = FastAPI(title="Decentralized Claim Verifier API")
@@ -47,39 +47,32 @@ class AbhaRecord(BaseModel):
     past_diagnoses: List[Diagnosis] = Field(default_factory=list)
     medications: List[str] = Field(default_factory=list)
 
-# --- NEW: Input model for the API endpoint ---
+# --- Input models for the API endpoint ---
 class ClaimRequest(BaseModel):
     ipfs_hash: str = Field(..., description="IPFS hash (CID) of the claim PDF.")
     abha_identifier: str = Field(..., description="Patient's Aadhaar/ABHA identifier.")
 
 
-"""
-Gemini API client initialization
-
-SECURITY NOTE:
-- Do NOT hardcode API keys in source control. GitHub will block pushes if secrets are detected.
-- Set GEMINI_API_KEY in environment (e.g., .env, deployment secret store) and load from os.environ.
-"""
+# --- Groq AI client initialization ---
 try:
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        raise RuntimeError("GEMINI_API_KEY is not set. Configure it in environment variables.")
-    
-    # Initialize new genai client
-    client = genai.Client(api_key=gemini_api_key)
-    
-    print("⏳ Testing Gemini API connection...")
-    test_response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents="Respond with a single word: 'Hello'"
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        raise RuntimeError("GROQ_API_KEY is not set. Configure it in .env")
+    if Groq is None:
+        raise RuntimeError("groq package not installed. Run: pip install groq")
+
+    client = Groq(api_key=groq_api_key)
+
+    print("⏳ Testing Groq API connection...")
+    test_chat = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": "Respond with a single word: OK"}],
+        max_tokens=5
     )
-    if test_response and test_response.text:
-        print(f"✅ Gemini API is WORKING! Test response: '{test_response.text.strip()}'")
-    else:
-        print("⚠️ Gemini API connected but returned an empty response.")
-        
+    print(f"✅ Groq API is WORKING! Response: '{test_chat.choices[0].message.content.strip()}'")
+
 except Exception as e:
-    print(f"❌ Gemini client NOT working / initialized. Error: {e}")
+    print(f"❌ Groq client NOT working. Error: {e}")
     client = None
 
 # --- KNOWLEDGE BASES ---
@@ -445,8 +438,7 @@ class RuleEngine:
         self.detailed_analysis.append("Analysis (Rule 10): Checked document hash against Mock Duplicate DB.")
 
     def _add_placeholders_for_other_rules(self):
-        skipped_rules = {9: "Geolocation consistency", 11: "Voice/video verification", 16: "Network graph analysis", 17: "Unusual payment flow", 18: "Incapacity vs. activity check", 21: "Imaging authenticity", 23: "Claim narrative similarity", 24: "Disease progression plausibility", 25: "Cross-product claims", 27: "Device fingerprinting", 28: "Social network/family claims"};
-        for rule_num, desc in skipped_rules.items(): self.detailed_analysis.append(f"Analysis (Rule {rule_num}): SKIPPED - {desc} (Requires external data or advanced analysis).")
+        # User requested to remove placeholders for rules 9, 11, 16, 17, 18, 21, 23, 24, 25, 27, 28
         self.detailed_analysis.append("Analysis (Rule 30): PASSED - Explainability provided via this detailed analysis.")
 
 
@@ -462,45 +454,53 @@ def get_ai_score_and_reasoning(
         rec = "PENDING REVIEW"; score = pre_risk_score
         if pre_risk_score >= 100 or any("Fail" in flag for flag in red_flags): rec = "REJECT"; score = max(score, 85)
         elif pre_risk_score == 0 and not red_flags: rec = "APPROVE"; score = min(score, 25)
-        return score, "AI Error: Gemini client not initialized. Recommendation based on rule score.", rec
+        return score, "AI Error: Groq client not initialized. Recommendation based on rule score.", rec
 
     prompt = f"""
     Analyze the insurance claim based on the Rule Engine's findings. Provide a final aggregate_score (0-100), reasoning, and recommendation ('APPROVE', 'REJECT', 'PENDING REVIEW').
 
     **Scoring Guide (Low Score = Good):**
-    * 0-30: APPROVE (Low risk)
-    * 31-70: PENDING REVIEW (Moderate risk or requires human check)
-    * 71-100: REJECT (High risk or rule failures)
+    * 0-30: APPROVE (Low risk - ONLY if ZERO red flags of any kind)
+    * 31-70: PENDING REVIEW (Moderate risk, any warnings present, or requires human check)
+    * 71-100: REJECT (High risk or rule failures - "Fail" flags present)
 
     **Input Data:**
     1.  **Rule Engine Risk Score:** {pre_risk_score} (0=Low, 100+=Very High)
     2.  **Red Flags Found:** {json.dumps(red_flags)}
     3.  **Extracted PDF Data:** {json.dumps(extracted_data, default=str)}
-    4.  **Rule Analysis Steps:** (Review for context, includes SKIPPED rules)
 
     **Your Task:**
-    1.  **Cost Plausibility:** Assess if the 'total_amount' (₹{extracted_data.get('total_amount', 0)}) is reasonable for the primary 'diagnosis' ('{(extracted_data.get('diagnoses') or ["N/A"])[0]}'). Use general medical cost knowledge. Add this to your reasoning.
-    2.  **Recommendation Logic:**
-        * If any "Fail" (Identity Fail, Logic Fail, Policy Fail, Authenticity Fail) red flags exist OR pre_risk_score >= 100: Recommend REJECT.
-        * If pre_risk_score == 0 AND there are NO red flags AND cost seems plausible: Recommend APPROVE.
-        * Otherwise (Warn flags, History Mismatch, External Risk/Warn, cost seems slightly high/low): Recommend PENDING REVIEW.
+    1.  **Cost Plausibility:** Assess if the 'total_amount' (₹{extracted_data.get('total_amount', 0)}) is reasonable for the primary 'diagnosis' ('{(extracted_data.get('diagnoses') or ["N/A"])[0]}'). Use general Indian medical cost knowledge.
+    2.  **Recommendation Logic (STRICT):**
+        * If any red flag contains "Fail" OR pre_risk_score >= 100: You MUST Recommend REJECT.
+        * If NO red flags exist AND pre_risk_score == 0 AND cost is plausible: Recommend APPROVE.
+        * In ALL OTHER CASES (any "Warn", "Mismatch", "External" flags, or pre_risk_score > 0): Recommend PENDING REVIEW.
     3.  **Final Score:** Assign a score (0-100) consistent with your recommendation.
-    4.  **Reasoning:** Summarize the key factors (especially red flags and cost plausibility) driving your recommendation. Mention skipped rules if relevant.
+    4.  **Reasoning:** Summarize all key factors clearly. Be specific about what triggered each concern.
 
-    **Output (JSON only):**
-    {{"aggregate_score": <score>, "reasoning": "<your_summary>", "recommendation": "<RECOMMENDATION>"}}
+    **Output (JSON only, no markdown):**
+    {{"aggregate_score": <score>, "reasoning": "<your detailed summary>", "recommendation": "<APPROVE|REJECT|PENDING REVIEW>"}}
     """
 
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1
-            )
+
+        chat = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert insurance fraud detection AI. Always respond in valid JSON exactly as requested."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.1,
+            max_tokens=1024,
+            response_format={"type": "json_object"}
         )
-        response_content = response.text
+        response_content = chat.choices[0].message.content
         response_json = json.loads(response_content)
 
         rec = response_json.get("recommendation", "REJECT").upper()
@@ -514,7 +514,7 @@ def get_ai_score_and_reasoning(
         return score, reason, rec
 
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        print(f"Groq API error: {e}")
         rec = "PENDING REVIEW"
         if pre_risk_score >= 100 or any("Fail" in flag for flag in red_flags): rec = "REJECT"
         elif pre_risk_score == 0 and not red_flags: rec = "APPROVE"
@@ -525,7 +525,12 @@ def get_ai_score_and_reasoning(
 # --- MAIN API ENDPOINT ---
 @app.post("/verify-claim/")
 async def verify_claim(request: ClaimRequest):
-    print(f"Received request for ABHA ID: {request.abha_identifier}, IPFS Hash: {request.ipfs_hash}")
+    print(f"\n{'─'*60}")
+    print(f"📥 NEW CLAIM REQUEST")
+    print(f"   ABHA ID  : {request.abha_identifier}")
+    print(f"   IPFS Hash: {request.ipfs_hash}")
+    print('─'*60)
+
     try:
         pdf_content = fetch_pdf_from_ipfs(request.ipfs_hash)
         simplified_abha_dict = get_simplified_abha_data("dummy_abha_database.json", request.abha_identifier)
@@ -562,6 +567,87 @@ async def verify_claim(request: ClaimRequest):
     )
     print(f"AI Result - Score: {final_score}, Recommendation: {final_recommendation}")
 
+    ex = engine.extracted  # shorthand
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+    def yn(val):
+        if val is True:  return "✅ YES"
+        if val is False: return "❌ NO"
+        return str(val) if val not in (None, "") else "N/A"
+
+    def section(title):
+        print(f"\n{'─'*60}")
+        print(f"  {title}")
+        print('─'*60)
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    decision_icon = {"APPROVE": "✅", "PENDING REVIEW": "⚠️ ", "REJECT": "🚫"}.get(final_recommendation, "❓")
+    print("\n" + "═"*60)
+    print(f"  📊  CLAIM ANALYSIS COMPLETE  {decision_icon} {final_recommendation}")
+    print("═"*60)
+    print(f"  ABHA ID      : {request.abha_identifier}")
+    print(f"  IPFS Hash    : {request.ipfs_hash}")
+
+    # ── Patient / ABHA ────────────────────────────────────────────────────────
+    section("👤 PATIENT INFO (ABHA Record)")
+    abha = simplified_abha_dict or {}
+    print(f"  Name         : {abha.get('name', 'N/A')}")
+    print(f"  DOB / Age    : {abha.get('dob', 'N/A')}  |  Claimed age: {ex.get('patient_age', 'N/A')}")
+    print(f"  Gender       : {yn(abha.get('gender', 'N/A'))}  |  Policy gender: {ex.get('patient_gender', 'N/A')}")
+    print(f"  Blood Group  : {abha.get('blood_group', 'N/A')}")
+    print(f"  Existing Cond: {', '.join(abha.get('existing_conditions', [])) or 'None listed'}")
+    print(f"  Policy Type  : {abha.get('policy_type', 'N/A')}")
+    print(f"  Policy Since : {abha.get('policy_start_date', 'N/A')}  (waiting period: {abha.get('waiting_period_months', '?')} months)")
+    print(f"  Prior Claims : {abha.get('prior_claims_count', 0)}")
+
+    # ── Extracted PDF Data ────────────────────────────────────────────────────
+    section("📄 EXTRACTED FROM PDF DOCUMENT")
+    print(f"  Hospital     : {ex.get('hospital_name', 'N/A')}")
+    print(f"  Patient Name : {ex.get('patient_name', 'N/A')}")
+    print(f"  Admission    : {ex.get('admission_date', 'N/A')}  →  Discharge: {ex.get('discharge_date', 'N/A')}")
+    days = ex.get('days_in_hospital', 'N/A')
+    print(f"  Stay (days)  : {days}")
+    diagnoses = ex.get('diagnoses') or []
+    print(f"  Diagnoses    : {', '.join(diagnoses) if diagnoses else 'None extracted'}")
+    procedures = ex.get('procedures') or []
+    print(f"  Procedures   : {', '.join(procedures) if procedures else 'None extracted'}")
+    print(f"  Total Bill   : ₹{ex.get('total_amount', 'N/A')}")
+    print(f"  Breakdown    : Room ₹{ex.get('room_charges', 'N/A')}  |  Surg ₹{ex.get('surgery_charges', 'N/A')}  |  Meds ₹{ex.get('medicine_charges', 'N/A')}")
+    print(f"  Doctor Sig   : {yn(ex.get('has_doctor_signature'))}")
+    print(f"  Hospital Seal: {yn(ex.get('has_hospital_seal'))}")
+    print(f"  File Hash    : {str(ex.get('file_hash', 'N/A'))[:24]}...")
+
+    # ── Scores ────────────────────────────────────────────────────────────────
+    section("🎯 SCORES & DECISION")
+    print(f"  Rule Engine  : {pre_risk_score:>4}/100")
+    print(f"  Groq AI      : {final_score:>4}/100  →  {decision_icon} {final_recommendation}")
+    band = "🟢 LOW RISK" if final_score <= 30 else ("🟡 MEDIUM RISK" if final_score <= 70 else "🔴 HIGH RISK")
+    print(f"  Risk Band    : {band}")
+
+    # ── Red Flags ─────────────────────────────────────────────────────────────
+    section(f"🚩 RED FLAGS  ({len(red_flags)} found)")
+    if red_flags:
+        for i, flag in enumerate(red_flags, 1):
+            print(f"  {i:>2}. {flag}")
+    else:
+        print("  None — all checks passed!")
+
+    # ── Rule Analysis Steps ───────────────────────────────────────────────────
+    section(f"🔍 RULE-BY-RULE ANALYSIS  ({len(detailed_analysis)} checks)")
+    for step in detailed_analysis:
+        icon = "⚠️ " if "Warn" in step or "Mismatch" in step else ("❌ " if "Fail" in step or "SKIPPED" in step else "✅ ")
+        print(f"  {icon} {step}")
+
+    # ── AI Reasoning ──────────────────────────────────────────────────────────
+    section("🤖 GROQ AI REASONING")
+    for part in final_reasoning.replace('\n', ' ').split('. '):
+        part = part.strip()
+        if part:
+            print(f"  • {part}.")
+
+    print("\n" + "═"*60 + "\n")
+
+
 
     hard_failure = pre_risk_score >= 100 or any("Fail" in flag for flag in red_flags)
     if hard_failure and final_recommendation != "REJECT":
@@ -571,7 +657,7 @@ async def verify_claim(request: ClaimRequest):
         final_reasoning = f"[AUTO-REJECTED due to hard rule failure]. AI Reason: {final_reasoning}"
 
     print("Sending final response.")
-    return {
+    result = {
         "aggregate_score": final_score,
         "reasoning": final_reasoning,
         "recommendation": final_recommendation,
@@ -581,6 +667,7 @@ async def verify_claim(request: ClaimRequest):
         "extracted_data_points": engine.extracted,
         "simplified_abha_data_used": simplified_abha_dict 
     }
+    return result
 
 # --- Server Run Command ---
 if __name__ == "__main__":

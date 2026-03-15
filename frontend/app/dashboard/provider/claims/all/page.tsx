@@ -23,6 +23,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { 
   getAllClaims,
   approveClaim,
+  rejectClaim,
   getClaimStatusString,
   getClaimStatusColor,
   CLAIM_STATUS_APPROVED,
@@ -40,6 +41,7 @@ export default function AllClaimsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [approvingId, setApprovingId] = useState<string | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
   
   const { walletAddress, userRole } = useFreighterWallet()
   const { toast } = useToast()
@@ -53,7 +55,6 @@ export default function AllClaimsPage() {
   const fetchClaims = async () => {
     try {
       setLoading(true)
-      console.log("🔍 Fetching all claims from blockchain...")
       const blockchainClaims = await getAllClaims()
       
       const mappedClaims = blockchainClaims.map((c: any) => ({
@@ -67,12 +68,15 @@ export default function AllClaimsPage() {
         status_string: getClaimStatusString(Number(c.status)),
         claimed_at: c.claimed_at,
         processed_at: c.processed_at,
+        abhaId: c.abhaId,
+        ipfsCid: c.ipfsCid,
+        claimDescription: c.claimDescription,
+        hospitalName: c.hospitalName
       }))
       
       setClaims(mappedClaims)
-      console.log("✅ Loaded", mappedClaims.length, "claims from blockchain")
     } catch (error) {
-      console.error("❌ Error fetching claims:", error)
+      console.error("Error fetching claims:", error)
       toast({
         title: "Error",
         description: "Failed to load claims from blockchain",
@@ -87,11 +91,41 @@ export default function AllClaimsPage() {
     setApprovingId(claimId)
     try {
       await approveClaim(Number(claimId))
+      toast({
+        title: "✅ Claim Approved",
+        description: `Claim #${claimId} approved on blockchain.`,
+      })
       await fetchClaims()
     } catch (error: any) {
       console.error("Error approving claim:", error)
+      toast({
+        title: "Approval Failed",
+        description: error?.message || "Failed to approve claim",
+        variant: "destructive",
+      })
     } finally {
       setApprovingId(null)
+    }
+  }
+
+  const handleRejectClaim = async (claimId: string) => {
+    setRejectingId(claimId)
+    try {
+      await rejectClaim(Number(claimId))
+      toast({
+        title: "🚫 Claim Rejected",
+        description: `Claim #${claimId} rejected on blockchain.`,
+      })
+      await fetchClaims()
+    } catch (error: any) {
+      console.error("Error rejecting claim:", error)
+      toast({
+        title: "Rejection Failed",
+        description: error?.message || "Failed to reject claim",
+        variant: "destructive",
+      })
+    } finally {
+      setRejectingId(null)
     }
   }
 
@@ -423,15 +457,28 @@ export default function AllClaimsPage() {
                   <div className="flex justify-end mt-4 gap-2">
                     {claim.status === CLAIM_STATUS_PENDING && (
                       <>
-                        <Button variant="outline" className="border-red-500 text-red-500 hover:bg-red-50">
-                          Reject Claim
+                        <Button 
+                          variant="outline" 
+                          className="border-red-500 text-red-500 hover:bg-red-50"
+                          disabled={approvingId === claim.claim_id || rejectingId === claim.claim_id}
+                          onClick={() => handleRejectClaim(claim.claim_id)}
+                        >
+                          {rejectingId === claim.claim_id ? (
+                            <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Rejecting...</>
+                          ) : (
+                            "Reject Claim"
+                          )}
                         </Button>
                         <Button 
                           className="bg-green-600 hover:bg-green-700"
-                          disabled={approvingId === claim.claim_id}
+                          disabled={approvingId === claim.claim_id || rejectingId === claim.claim_id}
                           onClick={() => handleApproveClaim(claim.claim_id)}
                         >
-                          {approvingId === claim.claim_id ? "Approving..." : "Approve Claim"}
+                          {approvingId === claim.claim_id ? (
+                            <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Approving...</>
+                          ) : (
+                            "Approve Claim"
+                          )}
                         </Button>
                       </>
                     )}

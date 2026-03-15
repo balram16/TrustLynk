@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "C:\\TrustLynk\\contracts\\ethereum\\contracts\\InsurancePortal.sol": {
-      "lastModificationDate": 1773514575358,
-      "contentHash": "fd7c98ab4911ecfed0899e72bb42d69e",
+      "lastModificationDate": 1773532695222,
+      "contentHash": "401b02d436218c4a87f8e4b18f4d54cd",
       "sourceName": "contracts/InsurancePortal.sol",
       "solcConfig": {
         "version": "0.8.20",

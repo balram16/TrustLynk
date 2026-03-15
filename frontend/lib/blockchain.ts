@@ -25,8 +25,8 @@ const CONTRACT_ABI = [
   "function getMyPolicies(address _userAddress) external view returns (tuple(uint256 policyId, address userAddress, uint256 purchaseDate, uint256 expiryDate, uint256 premiumPaidWei, uint256 monthlyPremiumWei, bool active, uint256 tokenId, string metadataUri, uint256 escrowId, string holderName, uint256 holderAge, string holderGender, string holderBloodGroup)[])",
 
   // Claims (uses ClaimParams struct)
-  "function claimPolicy(tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName, address userAddress) params) external",
-  "function sendOCRRequest(string source, bytes encryptedSecretsReference, uint8 donHostedSecretsSlotID, uint64 donHostedSecretsVersion, string[] args, uint32 callbackGasLimit, tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName, address userAddress) claimParams) external returns (bytes32 requestId)",
+  "function claimPolicy(tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName, address userAddress, uint256 claimAmount) params) external",
+  "function sendOCRRequest(string source, bytes encryptedSecretsReference, uint8 donHostedSecretsSlotID, uint64 donHostedSecretsVersion, string[] args, uint32 callbackGasLimit, tuple(uint256 policyId, uint32 aggregateScore, string abhaId, string ipfsCid, string oracleRequestId, string claimDescription, string hospitalName, address userAddress, uint256 claimAmount) claimParams) external returns (bytes32 requestId)",
   "function approveClaim(uint256 _claimId) external",
   "function rejectClaim(uint256 _claimId) external",
   "function getClaimStatus(uint256 _claimId) external view returns (uint32, uint256, uint32)",
@@ -168,6 +168,11 @@ export interface PolicyClaim {
   status: number;
   claimed_at: string;
   processed_at: string;
+  abha_id: string;
+  ipfs_cid: string;
+  oracle_request_id: string;
+  claim_description: string;
+  hospital_name: string;
 }
 
 export interface PolicyNFTMetadata {
@@ -541,8 +546,14 @@ export async function getUserPolicies(walletAddress: string): Promise<Blockchain
 // ==========================================
 
 export async function claimPolicy(
-  policyId: any,
-  aggregateScore: number
+  policyId: string,
+  aggregateScore: number,
+  claimAmountRequested: number,
+  abhaId: string = "",
+  ipfsCid: string = "",
+  oracleRequestId: string = "",
+  claimDescription: string = "",
+  hospitalName: string = ""
 ): Promise<{ success: boolean; transactionHash?: string; claimAmount?: number }> {
   try {
     const numericPolicyId = parseInt(policyId);
@@ -550,28 +561,37 @@ export async function claimPolicy(
       throw new Error("Invalid policy ID");
     }
 
-    console.log(`📋 Claiming policy:
+    const cappedScore = Math.min(100, Math.max(0, Math.round(aggregateScore)));
+    const claimAmountWei = ethers.parseEther((claimAmountRequested / INR_TO_ETH_RATE).toFixed(18));
+
+    console.log(`📋 Claiming policy directly to blockchain:
     - Policy ID: ${numericPolicyId}
-    - Aggregate Score: ${aggregateScore}
-    - Expected Status: ${aggregateScore <= 30 ? "APPROVED" : aggregateScore <= 70 ? "PENDING" : "REJECTED"
+    - Aggregate Score: ${cappedScore}
+    - Claim Amount: ${claimAmountRequested} INR
+    - ABHA ID: ${abhaId}
+    - IPFS CID: ${ipfsCid}
+    - Hospital: ${hospitalName}
+    - Expected Status: ${cappedScore <= 30 ? "APPROVED" : cappedScore <= 70 ? "PENDING" : "REJECTED"
       }`);
 
     const contract = await getWriteContract();
+    const userAddress = await getWalletPublicKey();
 
-    // Pass as struct
+    // Pass as struct - this stores the claim IMMEDIATELY on the blockchain
     const tx = await contract.claimPolicy({
       policyId: numericPolicyId,
-      aggregateScore: aggregateScore,
-      abhaId: "",
-      ipfsCid: "",
-      oracleRequestId: "",
-      claimDescription: "",
-      hospitalName: "",
-      userAddress: await getWalletPublicKey(),
+      aggregateScore: cappedScore,
+      abhaId: abhaId,
+      ipfsCid: ipfsCid,
+      oracleRequestId: oracleRequestId,
+      claimDescription: claimDescription,
+      hospitalName: hospitalName,
+      userAddress: userAddress,
+      claimAmount: claimAmountWei,
     });
 
     const receipt = await tx.wait();
-    console.log("✅ Claim submitted manually:", receipt.hash);
+    console.log("✅ Claim stored directly on blockchain:", receipt.hash);
 
     const policies = await getAllPolicies();
     const policy = policies.find((p) => p.policy_id === numericPolicyId.toString());
@@ -588,6 +608,7 @@ export async function claimPolicy(
   }
 }
 
+
 export const ORACLE_SOURCE = `
 const abhaId = args[0];
 const ipfsHash = args[1];
@@ -595,7 +616,10 @@ const apiUrl = args[2];
 const apiRequest = Functions.makeHttpRequest({
   url: apiUrl,
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { 
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true" 
+  },
   data: { ipfs_hash: ipfsHash, abha_identifier: abhaId },
   timeout: 10000,
 });
@@ -700,6 +724,11 @@ export async function getUserClaims(userAddress: string): Promise<PolicyClaim[]>
       status: Number(claim.status),
       claimed_at: claim.claimedAt.toString(),
       processed_at: claim.processedAt.toString(),
+      abha_id: claim.abhaId || "",
+      ipfs_cid: claim.ipfsCid || "",
+      oracle_request_id: claim.oracleRequestId || "",
+      claim_description: claim.claimDescription || "",
+      hospital_name: claim.hospitalName || "",
     }));
   } catch (error: any) {
     if (error.reason && error.reason.includes("User not registered")) {
@@ -712,24 +741,39 @@ export async function getUserClaims(userAddress: string): Promise<PolicyClaim[]>
 }
 
 export async function getAllClaims(): Promise<PolicyClaim[]> {
+  const mapClaims = (rawClaims: any[]) => rawClaims.map((claim: any) => ({
+    claim_id: claim.claimId.toString(),
+    policy_id: claim.policyId.toString(),
+    user_address: claim.userAddress,
+    claim_amount: convertETHToINR(claim.claimAmount).toString(),
+    aggregate_score: Number(claim.aggregateScore),
+    status: Number(claim.status),
+    claimed_at: claim.claimedAt.toString(),
+    processed_at: claim.processedAt.toString(),
+    abha_id: claim.abhaId || "",
+    ipfs_cid: claim.ipfsCid || "",
+    oracle_request_id: claim.oracleRequestId || "",
+    claim_description: claim.claimDescription || "",
+    hospital_name: claim.hospitalName || "",
+  }));
+
+  // Try the Views contract first, fall back to the main contract
   try {
     const contract = getViewsContract();
     const claims = await contract.getAllClaims();
-
-    return claims.map((claim: any) => ({
-      claim_id: claim.claimId.toString(),
-      policy_id: claim.policyId.toString(),
-      user_address: claim.userAddress,
-      // Convert Wei → INR so display pages can safely parseInt() as INR
-      claim_amount: convertETHToINR(claim.claimAmount).toString(),
-      aggregate_score: Number(claim.aggregateScore),
-      status: Number(claim.status),
-      claimed_at: claim.claimedAt.toString(),
-      processed_at: claim.processedAt.toString(),
-    }));
-  } catch (error) {
-    console.error("Error fetching all claims:", error);
-    return [];
+    console.log(`✅ getAllClaims via Views contract: ${claims.length} claims`);
+    return mapClaims(claims);
+  } catch (viewsError) {
+    console.warn("Views contract failed, falling back to main contract:", viewsError);
+    try {
+      const contract = getReadContract();
+      const claims = await contract.getAllClaims();
+      console.log(`✅ getAllClaims via main contract fallback: ${claims.length} claims`);
+      return mapClaims(claims);
+    } catch (error) {
+      console.error("Error fetching all claims (both contracts failed):", error);
+      return [];
+    }
   }
 }
 
@@ -762,6 +806,54 @@ export async function approveClaim(
     return { success: true, transactionHash: receipt.hash };
   } catch (error: any) {
     console.error("Error approving claim:", error);
+    throw error;
+  }
+}
+
+// ==========================================
+// Utility / Display Helper Functions
+// ==========================================
+
+export function getClaimStatusString(status: number): string {
+  switch (status) {
+    case CLAIM_STATUS_APPROVED: return "Approved";
+    case CLAIM_STATUS_PENDING: return "Pending";
+    case CLAIM_STATUS_REJECTED: return "Rejected";
+    default: return "Unknown";
+  }
+}
+
+export function getClaimStatusColor(status: number): string {
+  switch (status) {
+    case CLAIM_STATUS_APPROVED: return "green";
+    case CLAIM_STATUS_PENDING: return "yellow";
+    case CLAIM_STATUS_REJECTED: return "red";
+    default: return "gray";
+  }
+}
+
+export function getPolicyTypeString(policyType: number): string {
+  switch (policyType) {
+    case POLICY_TYPE_HEALTH: return "Health";
+    case POLICY_TYPE_LIFE: return "Life";
+    case POLICY_TYPE_AUTO: return "Auto";
+    case POLICY_TYPE_HOME: return "Home";
+    case POLICY_TYPE_TRAVEL: return "Travel";
+    default: return "Unknown";
+  }
+}
+
+export async function rejectClaim(
+  claimId: number
+): Promise<{ success: boolean; transactionHash?: string }> {
+  try {
+    console.log(`❌ Rejecting claim ID: ${claimId}`);
+    const contract = await getWriteContract();
+    const tx = await contract.rejectClaim(claimId);
+    const receipt = await tx.wait();
+    return { success: true, transactionHash: receipt.hash };
+  } catch (error: any) {
+    console.error("Error rejecting claim:", error);
     throw error;
   }
 }
@@ -829,16 +921,7 @@ export async function getTotalTokens(): Promise<number> {
 // Helper Functions
 // ==========================================
 
-export function getPolicyTypeString(policyType: number): string {
-  switch (policyType) {
-    case POLICY_TYPE_HEALTH: return "Health";
-    case POLICY_TYPE_LIFE: return "Life";
-    case POLICY_TYPE_AUTO: return "Auto";
-    case POLICY_TYPE_HOME: return "Home";
-    case POLICY_TYPE_TRAVEL: return "Travel";
-    default: return "Unknown";
-  }
-}
+
 
 export function getPolicyTypeNumber(policyType: string): number {
   switch (policyType.toLowerCase()) {
@@ -860,23 +943,6 @@ export function formatDate(timestamp: string): string {
   return date.toLocaleDateString();
 }
 
-export function getClaimStatusString(status: number): string {
-  switch (status) {
-    case 1: return "Approved";
-    case 2: return "Pending Verification";
-    case 3: return "Rejected";
-    default: return "Unknown";
-  }
-}
-
-export function getClaimStatusColor(status: number): string {
-  switch (status) {
-    case 1: return "text-green-600 bg-green-50";
-    case 2: return "text-yellow-600 bg-yellow-50";
-    case 3: return "text-red-600 bg-red-50";
-    default: return "text-gray-600 bg-gray-50";
-  }
-}
 
 export function generatePolicyMetadata(
   policy: BlockchainPolicy,

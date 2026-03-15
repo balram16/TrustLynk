@@ -18,7 +18,8 @@ import {
   User,
   Building2,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  Clock
 } from "lucide-react"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -43,7 +44,7 @@ import {
   type OracleProgress 
 } from "@/lib/oracle-service"
 import { useRouter } from "next/navigation"
-import { claimPolicyWithOracle, getUserPolicies } from "@/lib/blockchain"
+import { claimPolicy, getUserPolicies } from "@/lib/blockchain"
 import { useFreighterWallet } from "@/context/freighter-wallet-context"
 
 type Step = 1 | 2 | 3 | 4;
@@ -208,7 +209,7 @@ export function MultiStepClaimForm() {
     }
   };
 
-  // Step 5: Submit Claim to Blockchain
+  // Step 5: Submit Claim to Blockchain (Direct - no Oracle dependency)
   const handleSubmitToChain = async () => {
     if (!formData.oracleResponse) return;
     
@@ -230,13 +231,28 @@ export function MultiStepClaimForm() {
 
       const policyId = parseInt(activePolicy.policy_id);
 
-      const result = await claimPolicyWithOracle(
-        policyId,
+      const enhancedClaimDetails = `
+User Description:
+${formData.claimDetails}
+
+--- AI Analysis Details (For Provider) ---
+Score: ${formData.oracleResponse.score}/100
+Red Flags:
+${formData.oracleResponse.redFlags.length > 0 ? formData.oracleResponse.redFlags.map(f => '- ' + f).join('\n') : 'None'}
+Suggestions:
+${formData.oracleResponse.suggestions.map(s => '- ' + s).join('\n')}
+`.trim();
+
+      // Use claimPolicy DIRECTLY - stores claim immediately on blockchain
+      // This bypasses the Chainlink Oracle flow which requires Oracle callback to finalize
+      const result = await claimPolicy(
+        policyId.toString(),
         formData.oracleResponse.score,
+        parseFloat(formData.claimAmount),
         formData.abhaId,
         formData.ipfsCid,
         String(formData.oracleResponse.requestId),
-        formData.claimDetails,
+        enhancedClaimDetails,
         formData.hospitalName
       );
 
@@ -639,67 +655,57 @@ export function MultiStepClaimForm() {
               </div>
             </div>
 
-            {/* Validations */}
-            {formData.oracleResponse.validations.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  Validations Passed
+            {/* Conditional User-Friendly Messages */}
+            {formData.oracleResponse.score <= 30 && (
+              <div className="bg-green-50 dark:bg-green-950 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                <h4 className="font-semibold text-green-700 dark:text-green-300 mb-2 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5" />
+                  Claim Processed Successfully
                 </h4>
-                <ul className="space-y-2">
-                  {formData.oracleResponse.validations.map((validation, idx) => (
-                    <li key={idx} className="text-sm flex items-start gap-2">
-                      <span className="text-green-500 flex-shrink-0">✓</span>
-                      <span>{validation}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-sm text-green-600 dark:text-green-400">
+                  Your claim details have been verified successfully. Your claim is considered low risk and will be processed automatically shortly.
+                </p>
               </div>
             )}
 
-            {/* Red Flags */}
-            {formData.oracleResponse.redFlags.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-orange-500" />
-                  Red Flags Detected
+            {formData.oracleResponse.score > 30 && formData.oracleResponse.score <= 70 && (
+              <div className="bg-yellow-50 dark:bg-yellow-950 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <h4 className="font-semibold text-yellow-700 dark:text-yellow-300 mb-2 flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Forwarded for Company Review
                 </h4>
-                <ul className="space-y-2">
-                  {formData.oracleResponse.redFlags.map((flag, idx) => (
-                    <li key={idx} className="text-sm flex items-start gap-2 text-orange-600 dark:text-orange-400">
-                      <span className="flex-shrink-0">⚠️</span>
-                      <span>{flag}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                  Your claim has been securely forwarded to the insurance provider for manual review. You can expect a resolution soon.
+                </p>
               </div>
             )}
 
-            {/* Suggestions */}
-            {formData.oracleResponse.suggestions.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-500" />
-                  Suggestions
-                </h4>
-                <ul className="space-y-2">
-                  {formData.oracleResponse.suggestions.map((suggestion, idx) => (
-                    <li key={idx} className="text-sm flex items-start gap-2">
-                      <span className="flex-shrink-0">📋</span>
-                      <span>{suggestion}</span>
-                    </li>
-                  ))}
-                </ul>
+            {formData.oracleResponse.score > 70 && (
+              <div className="space-y-4">
+                <div className="bg-red-50 dark:bg-red-950 p-4 rounded-lg border border-red-200 dark:border-red-800">
+                  <h4 className="font-semibold text-red-700 dark:text-red-300 mb-2 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                    Pending Final Provider Review
+                  </h4>
+                  <p className="text-sm text-red-600 dark:text-red-400 mb-3">
+                    We could not instantly approve this claim due to the following general inconsistencies:
+                  </p>
+                  <ul className="space-y-2 mb-4">
+                      <li className="text-sm flex items-start gap-2 text-red-600 dark:text-red-400">
+                        <span className="flex-shrink-0">•</span>
+                        <span>The submitted documents or bill amounts need further verification against policy limits.</span>
+                      </li>
+                      <li className="text-sm flex items-start gap-2 text-red-600 dark:text-red-400">
+                        <span className="flex-shrink-0">•</span>
+                        <span>Potential mismatch between current diagnosis details and available medical history.</span>
+                      </li>
+                  </ul>
+                  <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                    Your claim and documents are being sent to the provider. They will contact you if additional validation is required.
+                  </p>
+                </div>
               </div>
             )}
-
-            {/* Claim Status */}
-            <div className="bg-muted p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">Claim Status</h4>
-              <p className="text-sm">
-                {getClaimStatusFromScore(formData.oracleResponse.score).message}
-              </p>
-            </div>
 
             {/* Submit to Blockchain Button */}
             <Button className="w-full" size="lg" onClick={handleSubmitToChain} disabled={submittingClaim}>

@@ -158,6 +158,7 @@ contract InsurancePortal is FunctionsClient {
         string claimDescription;
         string hospitalName;
         address userAddress;
+        uint256 claimAmount;
     }
 
     // ==========================================
@@ -452,7 +453,7 @@ contract InsurancePortal is FunctionsClient {
             claimId: claimCounter,
             policyId: params.policyId,
             userAddress: msg.sender,
-            claimAmount: policy.coverageAmount,
+            claimAmount: params.claimAmount,
             aggregateScore: params.aggregateScore,
             status: status,
             claimedAt: block.timestamp,
@@ -467,8 +468,8 @@ contract InsurancePortal is FunctionsClient {
         _userClaims[msg.sender].push(claimCounter);
 
         if (status == CLAIM_STATUS_APPROVED) {
-            require(address(this).balance >= policy.coverageAmount, "E18");
-            (bool sent, ) = payable(msg.sender).call{value: policy.coverageAmount}("");
+            require(address(this).balance >= params.claimAmount, "E18");
+            (bool sent, ) = payable(msg.sender).call{value: params.claimAmount}("");
             require(sent, "E19");
         }
 
