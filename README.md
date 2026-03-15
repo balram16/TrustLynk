@@ -534,5 +534,11 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 Made with ❤️ by the TrustLynk Team
 
+
+
+$1,000: Best DeFi Application using BitGo
+
+Build a DeFi application that leverages BitGo's wallet infrastructure to bring institutional-grade security to on-chain finance.
+Using BitGo's SDK and testnet, you can create multi-sig or MPC wallets, build and sign transactions programmatically, enforce policy rules (spending limits, whitelists, approval workflows), connect to DeFi protocols via WalletConnect, and set up webhooks for real-time notifications. This could be a policy-governed yield strategy that auto-rebalances across lending protocols, a multi-sig treasury manager for DAOs, a staking automation tool, or anything else that combines DeFi composability with BitGo's enterprise-grade controls.
 </div>
 

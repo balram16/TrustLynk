@@ -44,8 +44,9 @@ import {
   type OracleProgress 
 } from "@/lib/oracle-service"
 import { useRouter } from "next/navigation"
-import { claimPolicy, getUserPolicies } from "@/lib/blockchain"
+import { claimPolicy, getUserPolicies, getAllPolicies } from "@/lib/blockchain"
 import { useFreighterWallet } from "@/context/freighter-wallet-context"
+import { uploadEncryptedMedicalDoc } from "@/lib/fileverse-service"
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -67,6 +68,9 @@ interface ClaimFormData {
   
   // Step 4: Oracle Analysis
   oracleResponse: OracleResponse | null;
+
+  // Fileverse encrypted doc reference
+  fileverseFileId: string;
 }
 
 export function MultiStepClaimForm() {
@@ -84,6 +88,7 @@ export function MultiStepClaimForm() {
     billFile: null,
     ipfsCid: '',
     oracleResponse: null,
+    fileverseFileId: '',
   });
 
   // Loading states
@@ -159,10 +164,31 @@ export function MultiStepClaimForm() {
         setUploadProgress(progress);
       });
 
+      const ipfsCid = result.IpfsHash;
+
+      // --- IPFS succeeded, now also upload encrypted to Fileverse (non-blocking) ---
+      let fileverseFileId = '';
+      try {
+        // Get insurer wallet from the user's active policy (policy.createdBy)
+        const policies = await getAllPolicies();
+        const insurerWallet = policies.length > 0 ? (policies[0] as any).created_by || '' : '';
+        const patientWallet = walletAddress || '';
+
+        const fvResult = await uploadEncryptedMedicalDoc(file, patientWallet, insurerWallet);
+        fileverseFileId = fvResult.fileId;
+        if (fvResult.success) {
+          console.log('🔒 Fileverse encrypted doc stored. File ID:', fileverseFileId);
+        }
+      } catch (fvErr) {
+        console.warn('[Fileverse] Non-blocking upload error:', fvErr);
+      }
+      // -------------------------------------------------------------------------
+
       setFormData(prev => ({
         ...prev,
         billFile: file,
-        ipfsCid: result.IpfsHash
+        ipfsCid,
+        fileverseFileId,
       }));
 
       setUploadProgress({
@@ -241,6 +267,7 @@ Red Flags:
 ${formData.oracleResponse.redFlags.length > 0 ? formData.oracleResponse.redFlags.map(f => '- ' + f).join('\n') : 'None'}
 Suggestions:
 ${formData.oracleResponse.suggestions.map(s => '- ' + s).join('\n')}
+${formData.fileverseFileId ? `\n--- Encrypted Document ---\nFileverse ID: ${formData.fileverseFileId}` : ''}
 `.trim();
 
       // Use claimPolicy DIRECTLY - stores claim immediately on blockchain

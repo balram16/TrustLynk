@@ -22,6 +22,49 @@ try:
 except ImportError:
     Groq = None
 
+# --- Fileverse Audit Log Helper ---
+FILEVERSE_API_URL = "http://localhost:8001"
+FILEVERSE_API_KEY = os.getenv("FILEVERSE_API_KEY", "")
+
+def save_audit_to_fileverse(result: dict, claim_id: str = "") -> None:
+    """Save AI analysis result as an encrypted audit log on Fileverse. Non-blocking."""
+    print(f"🔍 [Fileverse] save_audit_to_fileverse called for Claim: {claim_id}")
+    import sys; sys.stdout.flush()
+    if not FILEVERSE_API_KEY:
+        print("[Fileverse] API key not set. Skipping audit log.")
+        return
+    try:
+        audit_payload = {
+            "claim_id": claim_id,
+            "ai_score": result.get("aggregate_score"),
+            "recommendation": result.get("recommendation"),
+            "red_flags": result.get("red_flags", []),
+            "reasoning": result.get("reasoning", ""),
+            "pre_risk_score": result.get("pre_risk_score"),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+        title = f"TrustLynk_Audit_{claim_id or 'claim'}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        resp = requests.post(
+            f"{FILEVERSE_API_URL}/api/ddocs?apiKey={FILEVERSE_API_KEY}",
+            headers={
+                "Content-Type": "application/json",
+            },
+            json={"title": title, "content": json.dumps(audit_payload, indent=2)},
+            timeout=10,
+        )
+        if resp.ok:
+            data = resp.json().get("data", {})
+            file_id = data.get("ddocId") if isinstance(data, dict) else ""
+            print(f"✅ [Fileverse] Audit log saved. File ID: {file_id}")
+            import sys; sys.stdout.flush()
+        else:
+            print(f"⚠️ [Fileverse] Audit log failed: {resp.status_code} - {resp.text[:200]}")
+            import sys; sys.stdout.flush()
+    except Exception as fv_err:
+        print(f"⚠️ [Fileverse] Audit log exception (non-blocking): {fv_err}")
+        import sys; sys.stdout.flush()
+
+
 # --- FastAPI App ---
 app = FastAPI(title="Decentralized Claim Verifier API")
 
@@ -299,7 +342,7 @@ class RuleEngine:
             abha_city = self.abha.address.split(',')[-1].strip().lower()
             if abha_city not in self.pdf_lower: alerts.append(f"City Mismatch ('{abha_city}')")
         except: pass
-        if alerts: self.risk_score += 70; self.red_flags.append(f"Identity Fail: {', '.join(alerts)}.")
+        if alerts: self.risk_score += 30; self.red_flags.append(f"Identity Warn: {', '.join(alerts)}")
         self.detailed_analysis.append("Analysis (Rule 1): Checked Bill vs ABHA identity (Name, DOB, City).")
 
     def _check_medical_history(self): 
@@ -649,7 +692,7 @@ async def verify_claim(request: ClaimRequest):
 
 
 
-    hard_failure = pre_risk_score >= 100 or any("Fail" in flag for flag in red_flags)
+    hard_failure = pre_risk_score >= 120 or any("Fail" in flag for flag in red_flags)
     if hard_failure and final_recommendation != "REJECT":
         print(f"Overriding AI recommendation. Hard failure detected (Score: {pre_risk_score}, Flags: {red_flags})")
         final_score = max(final_score, 85) 
@@ -665,8 +708,13 @@ async def verify_claim(request: ClaimRequest):
         "red_flags": red_flags,
         "detailed_analysis_steps": detailed_analysis,
         "extracted_data_points": engine.extracted,
-        "simplified_abha_data_used": simplified_abha_dict 
+        "simplified_abha_data_used": simplified_abha_dict
     }
+
+    # --- Save encrypted AI audit log to Fileverse (non-blocking) ---
+    save_audit_to_fileverse(result, claim_id=request.abha_identifier or "unknown")
+    # ---------------------------------------------------------------
+
     return result
 
 # --- Server Run Command ---
